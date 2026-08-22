@@ -5,7 +5,7 @@
 
 > DeepSeek Harness (DSH) 插件：在设置页提供「模型健康」面板——列出所有已配置模型，并一键批量测试可用性与延迟。
 >
-> English documentation: [README_EN](README_EN.md)
+> 中文 ｜ [EN](README_EN.md)
 
 ![模型健康面板](snapshot.png)
 

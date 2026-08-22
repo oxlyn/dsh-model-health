@@ -5,7 +5,7 @@
 
 > DeepSeek Harness (DSH) plugin: a "Model Health" panel in the settings page — lists all configured models and batch-tests their availability and latency with one click.
 >
-> 中文文档：[README](README.md)
+> [中文](README.md) ｜ EN
 
 ![Model Health panel](snapshot.png)
 
