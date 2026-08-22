@@ -5,6 +5,8 @@
 
 > DeepSeek Harness (DSH) 插件：在设置页提供「模型健康」面板——列出所有已配置模型，并一键批量测试可用性与延迟。
 
+![模型健康面板](snapshot.png)
+
 ## 功能 / Features
 
 读取 `$DSH_HOME/settings.yaml`（默认 `~/.dsh/settings.yaml`），提供三种使用方式：
@@ -102,20 +104,6 @@ dsh-model-health/
 
 - `@deepseek-ai/dsh-tools`: `0.1.0-rc.8` (exact — the **`next`**-tag line; npm `latest` is stale).
 - `@deepseek-ai/cordis`: `^4.0.1` (peerDependency — host provides it; types-only in code).
-
-## 坑 / Pitfalls（从真实 spike 提炼，防呆）
-
-1. npm dist-tag trap: `@deepseek-ai/dsh-tools` `latest` is a STALE 0.0.1-rc.1; the real line is under the `next` tag (0.1.0-rc.x). This package pins the next-tag version — never `npm i @deepseek-ai/dsh-tools` over it.
-   - npm dist-tag 坑：`@deepseek-ai/dsh-tools` 的 latest 是过期的 0.0.1-rc.1，正确版本在 next tag；已锁定，勿手动覆盖。
-
-2. `dsh plugin add <dir>` anchors relative paths to the INVOKING directory — run it from the parent directory, not from inside the plugin.
-   - dsh plugin add 的相对路径锚定调用目录——要在插件的父目录执行。
-
-3. In the bundle `cordis.patch.yml`, `name` is a package name (resolved via node_modules), not a relative path.
-   - cordis.patch.yml 里 name 用包名（走 node_modules 解析），不要用相对路径。
-
-4. Git 安装依赖 `prepare` 脚本现场构建 dist（本包已配置）；npm 安装则由 `files` 字段直接携带 dist。
-   - Git installs build dist on the fly via the `prepare` script; npm packages ship dist via the `files` field.
 
 ## License
 
