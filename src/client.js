@@ -1,14 +1,14 @@
-// dsh-model-list — client 模块：在设置页注入"模型列表"section。
+// dsh-model-health — client 模块：在设置页注入"模型列表"section。
 //
 // 格式：window.__ModuleLoader__.load({ id, factory: (require) => {...} })
 // 这是 DSH 浏览器侧的模块加载器格式，factory 内用 require() 获取依赖。
 //
-// 注册一个 settings.section slot，组件通过 fetch /api/model-list/json 获取
+// 注册一个 settings.section slot，组件通过 fetch /api/model-health/json 获取
 // 模型列表 JSON，然后用 React 直接渲染表格。
-// 支持"测试全部"：并发 POST /api/model-list/test，逐个更新测试状态。
+// 支持"测试全部"：并发 POST /api/model-health/test，逐个更新测试状态。
 //
 window.__ModuleLoader__.load({
-    id: "my-dsh-plugin",
+    id: "dsh-model-health",
     factory: (require) => {
         var module = { exports: {} };
         var exports = module.exports;
@@ -81,19 +81,25 @@ window.__ModuleLoader__.load({
                 fontSize: 12,
                 color: "var(--dsw-alias-label-tertiary, #888)",
             },
-            table: {
-                width: "100%",
-                borderCollapse: "collapse",
+            tableWrap: {
+                // 圆角/阴影放在外层容器：<table> 上的 overflow/border-radius 不生效，
+                // 且 collapse 模式下圆角无法裁剪单元格背景
                 background: "var(--dsw-alias-bg-module-platform, #fff)",
                 borderRadius: 8,
                 overflow: "hidden",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+            },
+            table: {
+                width: "100%",
+                borderCollapse: "collapse",
                 fontSize: 14,
             },
             th: {
                 padding: "10px 12px",
                 textAlign: "left",
-                borderBottom: "1px solid var(--dsw-alias-border-l2, #eee)",
+                // 四边全边框：collapse 模式下相邻边自动合并，
+                // 整张表（含外框）呈现统一闭合的网格线
+                border: "1px solid var(--dsw-alias-border-l2, #eee)",
                 background: "var(--dsw-alias-bg-layer-2, #fafafa)",
                 fontWeight: 600,
                 whiteSpace: "nowrap",
@@ -101,7 +107,7 @@ window.__ModuleLoader__.load({
             td: {
                 padding: "10px 12px",
                 textAlign: "left",
-                borderBottom: "1px solid var(--dsw-alias-border-l2, #eee)",
+                border: "1px solid var(--dsw-alias-border-l2, #eee)",
                 color: "var(--dsw-alias-label-primary, #333)",
             },
             code: {
@@ -177,7 +183,6 @@ window.__ModuleLoader__.load({
 
         // 列定义：optional=true 的列默认不显示，由多选框控制
         const COLUMNS = [
-            { key: "_idx", label: "#" },
             { key: "provider", label: "Provider" },
             { key: "modelId", label: "模型 ID", code: true, optional: true },
             { key: "modelName", label: "名称" },
@@ -208,9 +213,29 @@ window.__ModuleLoader__.load({
 
         /**
          * 模型列表 section 组件。
-         * fetch /api/model-list/json 获取数据 → React 渲染表格。
-         * "测试全部" → 并发 POST /api/model-list/test，逐个更新状态。
+         * fetch /api/model-health/json 获取数据 → React 渲染表格。
+         * "测试全部" → 并发 POST /api/model-health/test，逐个更新状态。
          */
+        // localStorage 持久化测试结果的 key
+        const STORAGE_KEY = "dsh-model-health:test-results";
+
+        function loadStoredResults() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                return raw ? JSON.parse(raw) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function saveStoredResults(results) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
+            } catch (e) {
+                // ignore quota errors
+            }
+        }
+
         function ModelListSection() {
             const [state, setState] = useState({
                 loading: true,
@@ -218,21 +243,24 @@ window.__ModuleLoader__.load({
                 data: null,
             });
             // testResults: { [index]: { status, latency?, error? } }
-            const [testResults, setTestResults] = useState({});
+            // 初始值从 localStorage 读取，实现跨刷新持久化
+            const [testResults, setTestResults] = useState(loadStoredResults);
             const [testing, setTesting] = useState(false);
             const [progress, setProgress] = useState({ done: 0, total: 0 });
             // 可选列显示状态：{ [colKey]: boolean }，默认 false
             const [optionalCols, setOptionalCols] = useState({});
+            // hover tooltip 状态：{ index, error } | null
+            const [tooltip, setTooltip] = useState(null);
 
             const loadData = useCallback(async () => {
                 setState((s) => ({ ...s, loading: true, error: null }));
                 try {
-                    const resp = await fetch("/api/model-list/json", { cache: "no-store" });
+                    const resp = await fetch("/api/model-health/json", { cache: "no-store" });
                     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                     const json = await resp.json();
                     if (!json.ok) throw new Error(json.error || "未知错误");
                     setState({ loading: false, error: null, data: json });
-                    setTestResults({}); // 重新加载时清空测试结果
+                    // 不清空 testResults，保留上次测试结果
                 } catch (e) {
                     setState({ loading: false, error: e.message, data: null });
                 }
@@ -253,6 +281,7 @@ window.__ModuleLoader__.load({
                 const init = {};
                 for (let i = 0; i < total; i++) init[i] = { status: "testing" };
                 setTestResults(init);
+                saveStoredResults(init);
 
                 let done = 0;
                 // 并发测试，但限制并发数避免压垮 host/网络
@@ -260,9 +289,18 @@ window.__ModuleLoader__.load({
                 const indices = Array.from({ length: total }, (_, i) => i);
                 const queue = [...indices];
 
+                // 更新单个结果并同步到 localStorage
+                function updateResult(idx, result) {
+                    setTestResults((s) => {
+                        const next = { ...s, [idx]: result };
+                        saveStoredResults(next);
+                        return next;
+                    });
+                }
+
                 async function runOne(idx) {
                     try {
-                        const resp = await fetch("/api/model-list/test", {
+                        const resp = await fetch("/api/model-health/test", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({ index: idx }),
@@ -270,25 +308,16 @@ window.__ModuleLoader__.load({
                         });
                         const json = await resp.json();
                         if (!json.ok) {
-                            setTestResults((s) => ({
-                                ...s,
-                                [idx]: { status: "fail", error: json.error },
-                            }));
+                            updateResult(idx, { status: "fail", error: json.error });
                         } else {
-                            setTestResults((s) => ({
-                                ...s,
-                                [idx]: {
-                                    status: json.status || "fail",
-                                    latency: json.latency,
-                                    error: json.error,
-                                },
-                            }));
+                            updateResult(idx, {
+                                status: json.status || "fail",
+                                latency: json.latency,
+                                error: json.error,
+                            });
                         }
                     } catch (e) {
-                        setTestResults((s) => ({
-                            ...s,
-                            [idx]: { status: "fail", error: e.message },
-                        }));
+                        updateResult(idx, { status: "fail", error: e.message });
                     } finally {
                         done++;
                         setProgress({ done, total });
@@ -362,8 +391,7 @@ window.__ModuleLoader__.load({
                 ),
                 h("div", { style: STYLES.toolbar },
                     h("span", { style: STYLES.meta },
-                        "来源：", data.source || "settings.yaml",
-                        " · 更新时间：", updatedAt
+                        "更新时间：", updatedAt
                     ),
                     // 测试统计
                     (stats.ok + stats.fail + stats.skip > 0) && h("span", { style: STYLES.progress },
@@ -382,13 +410,7 @@ window.__ModuleLoader__.load({
                         },
                         disabled: testing || models.length === 0,
                         onClick: testAll,
-                    }, testing ? "测试中..." : "测试全部"),
-                    // 刷新列表按钮
-                    h("button", {
-                        style: { ...STYLES.btn, ...(testing ? STYLES.btnDisabled : {}) },
-                        disabled: testing,
-                        onClick: loadData,
-                    }, "刷新列表")
+                    }, testing ? "测试中..." : "测试全部")
                 ),
                 // 可选列 toggle 按钮组
                 h("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
@@ -424,50 +446,123 @@ window.__ModuleLoader__.load({
                     ? h("div", { style: STYLES.center },
                         "未配置任何模型，请在 设置 → 模型 中添加。"
                     )
-                    : h("table", { style: STYLES.table },
+                    : h("div", { style: STYLES.tableWrap },
+                        h("table", { style: STYLES.table },
                         h("thead", null,
                             h("tr", null,
                                 visibleCols.map((col) =>
-                                    h("th", { key: col.key, style: STYLES.th }, col.label)
+                                    h("th", {
+                                        key: col.key,
+                                        style: STYLES.th,
+                                    }, col.label)
                                 )
                             )
                         ),
                         h("tbody", null,
-                            models.map((row, i) => {
-                                const tr = testResults[i] || { status: "idle" };
-                                const statusLabel = STATUS_LABEL[tr.status] || tr.status;
-                                const statusStyle = STATUS_STYLE[tr.status] || STYLES.badgeIdle;
-                                const latencyText = tr.latency != null ? `${tr.latency}ms` : "-";
-                                return h("tr", { key: (row.modelId || "") + i },
-                                    visibleCols.map((col) => {
-                                        if (col.key === "_idx") {
-                                            return h("td", { key: col.key, style: STYLES.td }, String(i + 1));
-                                        }
-                                        if (col.key === "_status") {
-                                            return h("td", { key: col.key, style: STYLES.td },
-                                                h("span", {
-                                                    style: { ...STYLES.badge, ...statusStyle },
-                                                    title: tr.error || "",
-                                                }, statusLabel)
+                            // 预计算 provider 连续段的 rowspan：{ [startIdx]: spanLen }
+                            // 相同 provider 的连续行合并为一个单元格
+                            (() => {
+                                const providerSpan = {};
+                                let k = 0;
+                                while (k < models.length) {
+                                    const start = k;
+                                    const p = models[k].provider;
+                                    while (k < models.length && models[k].provider === p) k++;
+                                    providerSpan[start] = k - start;
+                                }
+                                return models.map((row, i) => {
+                                    const tr = testResults[i] || { status: "idle" };
+                                    const statusLabel = STATUS_LABEL[tr.status] || tr.status;
+                                    const statusStyle = STATUS_STYLE[tr.status] || STYLES.badgeIdle;
+                                    const latencyText = tr.latency != null ? `${tr.latency}ms` : "-";
+                                    return h("tr", { key: (row.modelId || "") + i },
+                                        visibleCols.map((col) => {
+                                            if (col.key === "provider") {
+                                                const span = providerSpan[i];
+                                                if (span === undefined) return null; // 被合并，跳过
+                                                return h("td", {
+                                                    key: col.key,
+                                                    rowSpan: span,
+                                                    style: { ...STYLES.td, verticalAlign: "middle", fontWeight: 600 },
+                                                }, row.provider);
+                                            }
+                                            if (col.key === "_status") {
+                                                const hasError = tr.error && tr.status === "fail";
+                                                return h("td", {
+                                                    key: col.key,
+                                                    style: { ...STYLES.td },
+                                                },
+                                                    h("span", {
+                                                        style: {
+                                                            ...STYLES.badge,
+                                                            ...statusStyle,
+                                                            cursor: hasError ? "help" : "default",
+                                                        },
+                                                        onMouseEnter: hasError
+                                                            ? (e) => {
+                                                                const rowEl = e.currentTarget.closest('tr');
+                                                                const tableEl = e.currentTarget.closest('table');
+                                                                if (rowEl && tableEl) {
+                                                                    const rowRect = rowEl.getBoundingClientRect();
+                                                                    const tableRect = tableEl.getBoundingClientRect();
+                                                                    setTooltip({
+                                                                        index: i,
+                                                                        error: tr.error,
+                                                                        left: tableRect.left,
+                                                                        width: tableRect.width,
+                                                                        rowTop: rowRect.top,
+                                                                    });
+                                                                }
+                                                            }
+                                                            : undefined,
+                                                        onMouseLeave: hasError
+                                                            ? () => setTooltip(null)
+                                                            : undefined,
+                                                    }, statusLabel)
+                                                );
+                                            }
+                                            if (col.key === "_latency") {
+                                                return h("td", { key: col.key, style: STYLES.td }, latencyText);
+                                            }
+                                            const value = row[col.key] ?? "-";
+                                            return h("td", {
+                                                key: col.key,
+                                                style: STYLES.td,
+                                            },
+                                                col.code
+                                                    ? h("code", { style: STYLES.code }, String(value))
+                                                    : String(value)
                                             );
-                                        }
-                                        if (col.key === "_latency") {
-                                            return h("td", { key: col.key, style: STYLES.td }, latencyText);
-                                        }
-                                        const value = row[col.key] ?? "-";
-                                        return h("td", {
-                                            key: col.key,
-                                            style: STYLES.td,
-                                        },
-                                            col.code
-                                                ? h("code", { style: STYLES.code }, String(value))
-                                                : String(value)
-                                        );
-                                    })
-                                );
-                            })
+                                        })
+                                    );
+                                });
+                            })()
                         )
-                    )
+                        )
+                    ),
+                // 全宽 hover tooltip：横向占满表格，显示在所悬停行的正上方
+                tooltip ? h("div", {
+                    style: {
+                        position: "fixed",
+                        left: tooltip.left + "px",
+                        width: tooltip.width + "px",
+                        top: tooltip.rowTop + "px",
+                        transform: "translateY(-100%)",
+                        marginTop: -4,
+                        padding: "8px 12px",
+                        background: "var(--dsw-alias-state-error-bg, #2a2a2a)",
+                        color: "var(--dsw-alias-state-error-primary, #ff6b6b)",
+                        fontSize: 12,
+                        lineHeight: "16px",
+                        borderRadius: 6,
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-all",
+                        zIndex: 1000,
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                        border: "1px solid var(--dsw-alias-border-l2, #444)",
+                        pointerEvents: "none",
+                    },
+                }, tooltip.error) : null
             );
         }
 
@@ -482,9 +577,9 @@ window.__ModuleLoader__.load({
                 ctx.slots.register(
                     {
                         name: "settings.section",
-                        id: "model-list",
+                        id: "model-health",
                         order: 50,
-                        label: "模型列表",
+                        label: "模型健康",
                     },
                     ModelListSection
                 )

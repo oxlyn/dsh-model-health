@@ -1,7 +1,7 @@
 {
-  "name": "my-dsh-plugin",
+  "name": "dsh-model-health",
   "version": "0.1.0",
-  "description": "DSH plugin that lists all configured models in a table by reading $DSH_HOME/settings.yaml.",
+  "description": "DSH plugin that lists all configured models with availability/latency testing, by reading $DSH_HOME/settings.yaml.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",

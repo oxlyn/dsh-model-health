@@ -1,8 +1,8 @@
-// dsh-model-list — 在设置页展示模型列表的 DSH 插件。
+// dsh-model-health — 在设置页展示模型列表的 DSH 插件。
 //
 // 提供两种查看方式：
 // 1. Tool 插件 list_models：对话中调用，返回 Markdown 表格
-// 2. HTTP 路由 /api/model-list/json：返回 JSON，供 client 侧 React 组件 fetch 后直接渲染
+// 2. HTTP 路由 /api/model-health/json：返回 JSON，供 client 侧 React 组件 fetch 后直接渲染
 //
 // API 参考（来自 DSH 源码类型定义）：
 // - ctx.tools.register(defineTool({...}))  — @deepseek-ai/dsh-tools
@@ -17,8 +17,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { load as parseYaml } from 'js-yaml'
 
-// 为 ctx.webServer 补类型声明（DSH 运行时上层服务，类型不在 cordis 核心中）
-// 参考 @deepseek-ai/dsh-host-webserver 的 WebRoute 接口
+// 为 ctx.webServer 和 ctx.credentials 补类型声明（DSH 运行时上层服务，类型不在 cordis 核心中）
 declare module '@deepseek-ai/cordis' {
   interface Context {
     webServer: {
@@ -28,14 +27,21 @@ declare module '@deepseek-ai/cordis' {
         handler: (req: IncomingMessage, res: ServerResponse) => void | Promise<void>
       }): () => void
     }
+    // DSH credential service：通过环境变量名解析 API Key
+    // resolve(ref) 返回 { value } 或 undefined
+    credentials: {
+      resolve(ref: string): Promise<{ value: string } | undefined>
+    }
   }
 }
 
-export const name = 'dsh-model-list'
+export const name = 'dsh-model-health'
 
-// 声明所有用到的服务：tools（Tool 插件）、webServer（HTTP 路由）
-// Cordis 要求访问 ctx.xxx 必须先在 inject 中声明，否则抛 "cannot get property without inject"
-export const inject = ['tools', 'webServer']
+// 声明所有用到的服务：
+// - tools：Tool 插件
+// - webServer：HTTP 路由
+// - credentials：通过 apiKeyEnv 名解析实际 API Key（DSH 的 credential seam）
+export const inject = ['tools', 'webServer', 'credentials']
 
 export interface ModelRow {
   provider: string
@@ -181,7 +187,7 @@ export function apply(ctx: Context) {
   //    handler 签名: (req: IncomingMessage, res: ServerResponse) => void
   ctx.webServer.register({
     kind: 'exact',
-    path: '/api/model-list/json',
+    path: '/api/model-health/json',
     handler: (_req, res) => {
       try {
         const cfg = readSettings()
@@ -208,11 +214,11 @@ export function apply(ctx: Context) {
   })
 
   // ── 3. HTTP 路由（测试单个模型可用性）──────────────────────────────
-  //    POST /api/model-list/test  body: { "index": <number> }
+  //    POST /api/model-health/test  body: { "index": <number> }
   //    对该模型发起一次最小 chat completions 请求，返回 { ok, index, status, latency, error? }
   ctx.webServer.register({
     kind: 'exact',
-    path: '/api/model-list/test',
+    path: '/api/model-health/test',
     handler: async (req, res) => {
       // 读取请求体
       let body = ''
@@ -261,12 +267,22 @@ export function apply(ctx: Context) {
       }
 
       // 获取 API Key
-      const apiKey = process.env[row.apiKeyEnv] || ''
+      // 通过 DSH credential service 解析 API Key
+      // credentials.resolve(ref) 从 DSH 的 secret store 读取，无需进程环境变量
+      let apiKey = ''
+      if (row.apiKeyEnv) {
+        try {
+          const hit = await ctx.credentials.resolve(row.apiKeyEnv)
+          apiKey = hit?.value || ''
+        } catch (e) {
+          // resolve 可能抛错（如 ref 未配置），按未设置处理
+        }
+      }
       if (!apiKey) {
         res.setHeader('Content-Type', 'application/json; charset=utf-8')
         res.end(JSON.stringify({
           ok: true, index, status: 'fail',
-          error: `环境变量 ${row.apiKeyEnv} 未设置`,
+          error: `未配置 ${row.apiKeyEnv} 的 API Key（请在 设置 → 模型 中添加）`,
         }))
         return
       }
@@ -317,6 +333,6 @@ export function apply(ctx: Context) {
   })
 
   console.log(
-    `[dsh-model-list] ready — tool "list_models" + routes GET /api/model-list/json, POST /api/model-list/test`,
+    `[dsh-model-health] ready — tool "list_models" + routes GET /api/model-health/json, POST /api/model-health/test`,
   )
 }
