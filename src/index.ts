@@ -11,7 +11,7 @@
 //
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -44,6 +44,8 @@ export const name = 'dsh-model-health'
 export const inject = ['tools', 'webServer', 'credentials']
 
 export interface ModelRow {
+  /** 稳定标识 provider/modelId：测试结果与前端状态都按它关联，settings 顺序变化不错位 */
+  key: string
   provider: string
   displayName: string
   modelId: string
@@ -84,6 +86,22 @@ function readSettings(): Record<string, any> {
   return cfg && typeof cfg === 'object' ? cfg : {}
 }
 
+/** 按 mtime 缓存解析结果：并发测试时同一份 settings 只解析一次，文件变了自动失效。 */
+let settingsCache: { mtimeMs: number; cfg: Record<string, any> } | null = null
+function readSettingsCached(): Record<string, any> {
+  const settingsPath = join(dshHome(), 'settings.yaml')
+  try {
+    const mtimeMs = statSync(settingsPath).mtimeMs
+    if (settingsCache && settingsCache.mtimeMs === mtimeMs) return settingsCache.cfg
+    const cfg = readSettings()
+    settingsCache = { mtimeMs, cfg }
+    return cfg
+  } catch {
+    settingsCache = null
+    return readSettings()
+  }
+}
+
 /** 从 settings 配置对象中收集所有已配置的模型。 */
 export function collectModels(cfg: Record<string, any>): ModelRow[] {
   const rows: ModelRow[] = []
@@ -97,6 +115,7 @@ export function collectModels(cfg: Record<string, any>): ModelRow[] {
       const models = Array.isArray(p.models) ? p.models : []
       for (const m of models) {
         rows.push({
+          key: `${route}/${m.id || ''}`,
           provider: route,
           displayName: p.displayName || route,
           modelId: m.id || '',
@@ -119,6 +138,7 @@ export function collectModels(cfg: Record<string, any>): ModelRow[] {
     const models = Array.isArray(ds.models) ? ds.models : []
     for (const m of models) {
       rows.push({
+        key: `deepseek/${m.id || ''}`,
         provider: 'deepseek',
         displayName: 'DeepSeek',
         modelId: m.id || '',
@@ -164,6 +184,32 @@ function renderMarkdownTable(rows: ModelRow[]): string {
   ].join('\n')
 }
 
+/** 统一 JSON 响应：设状态码 + Content-Type + 序列化输出。 */
+function sendJson(res: ServerResponse, code: number, obj: unknown): void {
+  res.statusCode = code
+  res.setHeader('Content-Type', 'application/json; charset=utf-8')
+  res.end(JSON.stringify(obj))
+}
+
+/** 读 JSON body（限 64KB），且必须是 application/json（兼作 CSRF 门卫）。 */
+async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const ct = String(req.headers['content-type'] ?? '')
+  if (!ct.includes('application/json')) {
+    throw new Error('Content-Type 必须是 application/json')
+  }
+  let body = ''
+  for await (const chunk of req) {
+    body += chunk
+    if (body.length > 65536) throw new Error('请求体过大')
+  }
+  if (body === '') return {}
+  const parsed = JSON.parse(body) as unknown
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('请求体必须是 JSON 对象')
+  }
+  return parsed as Record<string, unknown>
+}
+
 export function apply(ctx: Context) {
   // ── 1. Tool 插件（对话中调用，返回 Markdown 表格）──────────────────
   ctx.tools.register(defineTool({
@@ -177,7 +223,7 @@ export function apply(ctx: Context) {
       render: (_args, value) => [{ type: 'text', text: value }],
     },
     async execute() {
-      const cfg = readSettings()
+      const cfg = readSettingsCached()
       return renderMarkdownTable(collectModels(cfg))
     },
   }))
@@ -190,79 +236,60 @@ export function apply(ctx: Context) {
     path: '/api/model-health/json',
     handler: (_req, res) => {
       try {
-        const cfg = readSettings()
+        const cfg = readSettingsCached()
         const rows = collectModels(cfg)
-        const payload = JSON.stringify({
+        sendJson(res, 200, {
           ok: true,
           count: rows.length,
           source: join(dshHome(), 'settings.yaml'),
           updatedAt: new Date().toISOString(),
           models: rows.map(toPublicRow),
         })
-        res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.end(payload)
       } catch (e) {
-        const payload = JSON.stringify({
-          ok: false,
-          error: `读取模型列表失败：${(e as Error).message}`,
-        })
-        res.statusCode = 500
-        res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.end(payload)
+        sendJson(res, 500, { ok: false, error: `读取模型列表失败：${(e as Error).message}` })
       }
     },
   })
 
   // ── 3. HTTP 路由（测试单个模型可用性）──────────────────────────────
-  //    POST /api/model-health/test  body: { "index": <number> }
-  //    对该模型发起一次最小 chat completions 请求，返回 { ok, index, status, latency, error? }
+  //    POST /api/model-health/test  body: { "key": "<provider>/<modelId>" }
+  //    按 key 定位模型（settings 增删/排序后不错位），
+  //    发起一次最小 chat completions 请求，返回 { ok, key, status, latency, error? }
   ctx.webServer.register({
     kind: 'exact',
     path: '/api/model-health/test',
     handler: async (req, res) => {
-      // 读取请求体
-      let body = ''
-      for await (const chunk of req) body += chunk
-      let index: number
+      let key: unknown
       try {
-        index = JSON.parse(body || '{}').index
-        if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) {
-          throw new Error('index 必须是非负整数')
-        }
+        key = (await readJsonBody(req)).key
+        if (typeof key !== 'string' || key === '') throw new Error('key 必须是非空字符串')
       } catch (e) {
-        res.statusCode = 400
-        res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.end(JSON.stringify({ ok: false, error: `参数错误：${(e as Error).message}` }))
+        sendJson(res, 400, { ok: false, error: `参数错误：${(e as Error).message}` })
         return
       }
 
       // 查找模型配置
       let row: ModelRow
       try {
-        const cfg = readSettings()
+        const cfg = readSettingsCached()
         const rows = collectModels(cfg)
-        const found = rows[index]
+        const found = rows.find((r) => r.key === key)
         if (!found) {
-          res.statusCode = 404
-          res.setHeader('Content-Type', 'application/json; charset=utf-8')
-          res.end(JSON.stringify({ ok: false, error: `未找到索引为 ${index} 的模型` }))
+          sendJson(res, 404, { ok: false, error: `未找到 key 为 ${key} 的模型（配置可能已变化，请刷新列表）` })
           return
         }
         row = found
       } catch (e) {
-        res.statusCode = 500
-        res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.end(JSON.stringify({ ok: false, error: (e as Error).message }))
+        sendJson(res, 500, { ok: false, error: (e as Error).message })
         return
       }
 
       // 仅支持 openai-completions 协议
       if (row.api !== 'openai-completions' && row.api !== 'deepseek') {
-        res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.end(JSON.stringify({
-          ok: true, index, status: 'skip',
+        sendJson(res, 200, {
+          ok: true, key, status: 'skip',
           error: `不支持 ${row.api} 协议的测试`,
-        }))
+        })
         return
       }
 
@@ -279,11 +306,10 @@ export function apply(ctx: Context) {
         }
       }
       if (!apiKey) {
-        res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.end(JSON.stringify({
-          ok: true, index, status: 'fail',
+        sendJson(res, 200, {
+          ok: true, key, status: 'fail',
           error: `未配置 ${row.apiKeyEnv} 的 API Key（请在 设置 → 模型 中添加）`,
-        }))
+        })
         return
       }
 
@@ -312,22 +338,19 @@ export function apply(ctx: Context) {
         const latency = Date.now() - start
 
         if (resp.ok) {
-          res.setHeader('Content-Type', 'application/json; charset=utf-8')
-          res.end(JSON.stringify({ ok: true, index, status: 'ok', latency }))
+          sendJson(res, 200, { ok: true, key, status: 'ok', latency })
         } else {
           const text = await resp.text().catch(() => '')
-          res.setHeader('Content-Type', 'application/json; charset=utf-8')
-          res.end(JSON.stringify({
-            ok: true, index, status: 'fail', latency,
+          sendJson(res, 200, {
+            ok: true, key, status: 'fail', latency,
             error: `HTTP ${resp.status}: ${text.slice(0, 300)}`,
-          }))
+          })
         }
       } catch (e: any) {
         clearTimeout(timer)
         const latency = Date.now() - start
         const msg = e?.name === 'AbortError' ? '超时（10s）' : (e?.message || String(e))
-        res.setHeader('Content-Type', 'application/json; charset=utf-8')
-        res.end(JSON.stringify({ ok: true, index, status: 'fail', latency, error: msg }))
+        sendJson(res, 200, { ok: true, key, status: 'fail', latency, error: msg })
       }
     },
   })

@@ -222,7 +222,17 @@ window.__ModuleLoader__.load({
         function loadStoredResults() {
             try {
                 const raw = localStorage.getItem(STORAGE_KEY);
-                return raw ? JSON.parse(raw) : {};
+                const parsed = raw ? JSON.parse(raw) : {};
+                const cleaned = {};
+                // 清理：残留的 testing（测试中刷新页面）归一为 idle；
+                // 旧版按数组下标存的纯数字 key 直接丢弃
+                for (const k in parsed) {
+                    if (/^\d+$/.test(k)) continue;
+                    const v = parsed[k];
+                    if (!v || typeof v !== "object") continue;
+                    cleaned[k] = v.status === "testing" ? { status: "idle" } : v;
+                }
+                return cleaned;
             } catch (e) {
                 return {};
             }
@@ -242,7 +252,8 @@ window.__ModuleLoader__.load({
                 error: null,
                 data: null,
             });
-            // testResults: { [index]: { status, latency?, error? } }
+            // testResults: { [modelKey]: { status, latency?, error? } }
+            // key 为 provider/modelId（与 host 侧一致），settings 增删/排序不错位；
             // 初始值从 localStorage 读取，实现跨刷新持久化
             const [testResults, setTestResults] = useState(loadStoredResults);
             const [testing, setTesting] = useState(false);
@@ -277,47 +288,46 @@ window.__ModuleLoader__.load({
                 const total = data.models.length;
                 setTesting(true);
                 setProgress({ done: 0, total });
-                // 初始化所有为 testing
+                // 初始化所有为 testing（按 provider/modelId key）
                 const init = {};
-                for (let i = 0; i < total; i++) init[i] = { status: "testing" };
+                for (const m of data.models) init[m.key] = { status: "testing" };
                 setTestResults(init);
                 saveStoredResults(init);
 
                 let done = 0;
                 // 并发测试，但限制并发数避免压垮 host/网络
                 const CONCURRENCY = 6;
-                const indices = Array.from({ length: total }, (_, i) => i);
-                const queue = [...indices];
+                const queue = data.models.map((m) => m.key);
 
                 // 更新单个结果并同步到 localStorage
-                function updateResult(idx, result) {
+                function updateResult(key, result) {
                     setTestResults((s) => {
-                        const next = { ...s, [idx]: result };
+                        const next = { ...s, [key]: result };
                         saveStoredResults(next);
                         return next;
                     });
                 }
 
-                async function runOne(idx) {
+                async function runOne(key) {
                     try {
                         const resp = await fetch("/api/model-health/test", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ index: idx }),
+                            body: JSON.stringify({ key }),
                             cache: "no-store",
                         });
                         const json = await resp.json();
                         if (!json.ok) {
-                            updateResult(idx, { status: "fail", error: json.error });
+                            updateResult(key, { status: "fail", error: json.error });
                         } else {
-                            updateResult(idx, {
+                            updateResult(key, {
                                 status: json.status || "fail",
                                 latency: json.latency,
                                 error: json.error,
                             });
                         }
                     } catch (e) {
-                        updateResult(idx, { status: "fail", error: e.message });
+                        updateResult(key, { status: "fail", error: e.message });
                     } finally {
                         done++;
                         setProgress({ done, total });
@@ -328,9 +338,9 @@ window.__ModuleLoader__.load({
                 // 限制并发的 worker pool
                 async function worker() {
                     while (queue.length > 0) {
-                        const idx = queue.shift();
-                        if (idx === undefined) break;
-                        await runOne(idx);
+                        const key = queue.shift();
+                        if (key === undefined) break;
+                        await runOne(key);
                     }
                 }
                 const workers = Array.from(
@@ -471,7 +481,7 @@ window.__ModuleLoader__.load({
                                     providerSpan[start] = k - start;
                                 }
                                 return models.map((row, i) => {
-                                    const tr = testResults[i] || { status: "idle" };
+                                    const tr = testResults[row.key] || { status: "idle" };
                                     const statusLabel = STATUS_LABEL[tr.status] || tr.status;
                                     const statusStyle = STATUS_STYLE[tr.status] || STYLES.badgeIdle;
                                     const latencyText = tr.latency != null ? `${tr.latency}ms` : "-";
