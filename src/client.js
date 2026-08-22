@@ -7,6 +7,9 @@
 // 模型列表 JSON，然后用 React 直接渲染表格。
 // 支持"测试全部"：并发 POST /api/model-health/test，逐个更新测试状态。
 //
+// 多语言：通过官方 locale 服务注册 zh/en 词典（与 dsh-plugin-mgr 同模式），
+// 语言跟随 harness 设置（设置 → 通用 → 语言），切换语言即时生效。
+//
 window.__ModuleLoader__.load({
     id: "dsh-model-health",
     factory: (require) => {
@@ -15,6 +18,65 @@ window.__ModuleLoader__.load({
 
         const React = require("react");
         const { useState, useEffect, useCallback } = React;
+
+        // ── 多语言词典（locale 服务，语言跟随 harness）─────────────────────────
+        const NS = "dsh-model-health";
+        const zh = {
+            tab: "模型健康",
+            title: "已配置模型",
+            updatedAt: "更新时间：",
+            testAll: "测试全部",
+            testingBtn: "测试中...",
+            showCols: "显示列：",
+            loading: "加载中...",
+            loadError: "读取模型列表失败：",
+            retry: "重试",
+            unknownError: "未知错误",
+            empty: "未配置任何模型，请在 设置 → 模型 中添加。",
+            colProvider: "Provider",
+            colModelId: "模型 ID",
+            colName: "名称",
+            colContextWindow: "上下文窗口",
+            colMaxTokens: "最大输出",
+            colInput: "输入模态",
+            colApi: "API 协议",
+            colBaseURL: "BaseURL",
+            colStatus: "状态",
+            colLatency: "延迟",
+            statusIdle: "未测试",
+            statusTesting: "测试中",
+            statusOk: "可用",
+            statusFail: "不可用",
+            statusSkip: "跳过",
+        };
+        const en = {
+            tab: "Model Health",
+            title: "Configured Models",
+            updatedAt: "Updated: ",
+            testAll: "Test All",
+            testingBtn: "Testing...",
+            showCols: "Columns: ",
+            loading: "Loading...",
+            loadError: "Failed to load model list: ",
+            retry: "Retry",
+            unknownError: "Unknown error",
+            empty: "No models configured. Add one in Settings → Models.",
+            colProvider: "Provider",
+            colModelId: "Model ID",
+            colName: "Name",
+            colContextWindow: "Context Window",
+            colMaxTokens: "Max Output",
+            colInput: "Modalities",
+            colApi: "API Protocol",
+            colBaseURL: "BaseURL",
+            colStatus: "Status",
+            colLatency: "Latency",
+            statusIdle: "Untested",
+            statusTesting: "Testing",
+            statusOk: "Available",
+            statusFail: "Unavailable",
+            statusSkip: "Skipped",
+        };
 
         // 内联样式（适配 DSH 明暗主题的 CSS 变量）
         const STYLES = {
@@ -181,27 +243,27 @@ window.__ModuleLoader__.load({
             },
         };
 
-        // 列定义：optional=true 的列默认不显示，由多选框控制
+        // 列定义：optional=true 的列默认不显示，由多选框控制；label 为词典 key
         const COLUMNS = [
-            { key: "provider", label: "Provider" },
-            { key: "modelId", label: "模型 ID", code: true, optional: true },
-            { key: "modelName", label: "名称" },
-            { key: "contextWindow", label: "上下文窗口", optional: true },
-            { key: "maxTokens", label: "最大输出", optional: true },
-            { key: "input", label: "输入模态", optional: true },
-            { key: "api", label: "API 协议", optional: true },
-            { key: "baseURL", label: "BaseURL", code: true, optional: true },
-            { key: "_status", label: "状态" },
-            { key: "_latency", label: "延迟" },
+            { key: "provider", label: "colProvider" },
+            { key: "modelId", label: "colModelId", code: true, optional: true },
+            { key: "modelName", label: "colName" },
+            { key: "contextWindow", label: "colContextWindow", optional: true },
+            { key: "maxTokens", label: "colMaxTokens", optional: true },
+            { key: "input", label: "colInput", optional: true },
+            { key: "api", label: "colApi", optional: true },
+            { key: "baseURL", label: "colBaseURL", code: true, optional: true },
+            { key: "_status", label: "colStatus" },
+            { key: "_latency", label: "colLatency" },
         ];
 
-        // 状态标签映射
+        // 状态标签映射（值为词典 key）
         const STATUS_LABEL = {
-            idle: "未测试",
-            testing: "测试中",
-            ok: "可用",
-            fail: "不可用",
-            skip: "跳过",
+            idle: "statusIdle",
+            testing: "statusTesting",
+            ok: "statusOk",
+            fail: "statusFail",
+            skip: "statusSkip",
         };
         const STATUS_STYLE = {
             idle: STYLES.badgeIdle,
@@ -215,6 +277,8 @@ window.__ModuleLoader__.load({
          * 模型列表 section 组件。
          * fetch /api/model-health/json 获取数据 → React 渲染表格。
          * "测试全部" → 并发 POST /api/model-health/test，逐个更新状态。
+         * props: { t, locale } — t 为绑定了词典命名空间的翻译函数，
+         * locale 用于订阅语言变化触发重渲染。
          */
         // localStorage 持久化测试结果的 key
         const STORAGE_KEY = "dsh-model-health:test-results";
@@ -246,7 +310,7 @@ window.__ModuleLoader__.load({
             }
         }
 
-        function ModelListSection() {
+        function ModelListSection({ t, locale }) {
             const [state, setState] = useState({
                 loading: true,
                 error: null,
@@ -262,6 +326,13 @@ window.__ModuleLoader__.load({
             const [optionalCols, setOptionalCols] = useState({});
             // hover tooltip 状态：{ index, error } | null
             const [tooltip, setTooltip] = useState(null);
+            // 语言切换时强制重渲染（t 每次调用读取当前激活词典）
+            const [localeTick, setLocaleTick] = useState(0);
+
+            useEffect(() => {
+                if (!locale || typeof locale.subscribe !== "function") return;
+                return locale.subscribe(() => setLocaleTick((n) => n + 1));
+            }, [locale]);
 
             const loadData = useCallback(async () => {
                 setState((s) => ({ ...s, loading: true, error: null }));
@@ -269,7 +340,7 @@ window.__ModuleLoader__.load({
                     const resp = await fetch("/api/model-health/json", { cache: "no-store" });
                     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                     const json = await resp.json();
-                    if (!json.ok) throw new Error(json.error || "未知错误");
+                    if (!json.ok) throw new Error(json.error || t("unknownError"));
                     setState({ loading: false, error: null, data: json });
                     // 不清空 testResults，保留上次测试结果
                 } catch (e) {
@@ -354,25 +425,32 @@ window.__ModuleLoader__.load({
 
             if (state.loading) {
                 return h("div", { style: STYLES.wrap },
-                    h("div", { style: STYLES.loading }, "加载中...")
+                    h("div", { style: STYLES.loading }, t("loading"))
                 );
             }
 
             if (state.error) {
                 return h("div", { style: STYLES.wrap },
                     h("div", { style: STYLES.error },
-                        "读取模型列表失败：", state.error
+                        t("loadError"), state.error
                     ),
                     h("button", {
                         style: STYLES.btn,
                         onClick: loadData,
-                    }, "重试")
+                    }, t("retry"))
                 );
             }
 
             const data = state.data || { models: [], count: 0, source: "", updatedAt: "" };
             const models = data.models || [];
-            const updatedAt = new Date(data.updatedAt || Date.now()).toLocaleString("zh-CN");
+            // 日期格式跟随当前语言（zh → zh-CN，en → en-US）
+            const activeLang =
+                locale && typeof locale.getLocale === "function"
+                    ? locale.getLocale().active
+                    : "zh";
+            const updatedAt = new Date(data.updatedAt || Date.now()).toLocaleString(
+                activeLang === "en" ? "en-US" : "zh-CN"
+            );
 
             // 统计测试结果
             const stats = { ok: 0, fail: 0, skip: 0, testing: 0 };
@@ -396,12 +474,12 @@ window.__ModuleLoader__.load({
 
             return h("div", { style: STYLES.wrap },
                 h("div", { style: STYLES.head },
-                    h("h2", { style: STYLES.title }, "已配置模型"),
+                    h("h2", { style: STYLES.title }, t("title")),
                     h("span", { style: STYLES.count }, data.count || models.length)
                 ),
                 h("div", { style: STYLES.toolbar },
                     h("span", { style: STYLES.meta },
-                        "更新时间：", updatedAt
+                        t("updatedAt"), updatedAt
                     ),
                     // 测试统计
                     (stats.ok + stats.fail + stats.skip > 0) && h("span", { style: STYLES.progress },
@@ -420,12 +498,12 @@ window.__ModuleLoader__.load({
                         },
                         disabled: testing || models.length === 0,
                         onClick: testAll,
-                    }, testing ? "测试中..." : "测试全部")
+                    }, testing ? t("testingBtn") : t("testAll"))
                 ),
                 // 可选列 toggle 按钮组
                 h("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
                     h("span", { style: { fontSize: 12, color: "var(--dsw-alias-label-tertiary, #888)" } },
-                        "显示列："
+                        t("showCols")
                     ),
                     optionalColumns.map((col) => {
                         const active = !!optionalCols[col.key];
@@ -449,12 +527,12 @@ window.__ModuleLoader__.load({
                                     ? "var(--dsw-alias-label-primary-foreground, #fff)"
                                     : "var(--dsw-alias-label-secondary, #555)",
                             },
-                        }, col.label);
+                        }, t(col.label));
                     })
                 ),
                 models.length === 0
                     ? h("div", { style: STYLES.center },
-                        "未配置任何模型，请在 设置 → 模型 中添加。"
+                        t("empty")
                     )
                     : h("div", { style: STYLES.tableWrap },
                         h("table", { style: STYLES.table },
@@ -464,7 +542,7 @@ window.__ModuleLoader__.load({
                                     h("th", {
                                         key: col.key,
                                         style: STYLES.th,
-                                    }, col.label)
+                                    }, t(col.label))
                                 )
                             )
                         ),
@@ -482,7 +560,8 @@ window.__ModuleLoader__.load({
                                 }
                                 return models.map((row, i) => {
                                     const tr = testResults[row.key] || { status: "idle" };
-                                    const statusLabel = STATUS_LABEL[tr.status] || tr.status;
+                                    const labelKey = STATUS_LABEL[tr.status];
+                                    const statusLabel = labelKey ? t(labelKey) : tr.status;
                                     const statusStyle = STATUS_STYLE[tr.status] || STYLES.badgeIdle;
                                     const latencyText = tr.latency != null ? `${tr.latency}ms` : "-";
                                     return h("tr", { key: (row.modelId || "") + i },
@@ -576,22 +655,28 @@ window.__ModuleLoader__.load({
             );
         }
 
-        // client 侧依赖：slots（注册 UI slot 的服务）
-        const inject = ["slots"];
+        // client 侧依赖：slots（注册 UI slot 的服务）+ locale（多语言词典）
+        const inject = ["slots", "locale"];
 
         /**
          * @param {import('@deepseek-ai/dsh-client-runtime/client').ClientContext} ctx
          */
         function apply(ctx) {
+            // 注册 zh/en 词典；t 每次调用读取当前激活语言
+            ctx.effect(() => ctx.locale.register(NS, { zh, en }), "dsh-model-health: dictionaries");
+            const t = ctx.locale.bind(NS);
+            const h = React.createElement;
+
             ctx.slots.inject("settings.section", () =>
                 ctx.slots.register(
                     {
                         name: "settings.section",
                         id: "model-health",
                         order: 50,
-                        label: "模型健康",
+                        label: () => t("tab"),
+                        locale: NS,
                     },
-                    ModelListSection
+                    () => h(ModelListSection, { t, locale: ctx.locale })
                 )
             );
         }
