@@ -84,7 +84,7 @@ window.__ModuleLoader__.load({
             tableWrap: {
                 // 圆角/阴影放在外层容器：<table> 上的 overflow/border-radius 不生效，
                 // 且 collapse 模式下圆角无法裁剪单元格背景
-                background: "var(--dsw-alias-bg-module-platform, #fff)",
+                background: "var(--dsw-alias-bg-layer-2, #fafafa)",
                 borderRadius: 8,
                 overflow: "hidden",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
@@ -100,7 +100,7 @@ window.__ModuleLoader__.load({
                 // 四边全边框：collapse 模式下相邻边自动合并，
                 // 整张表（含外框）呈现统一闭合的网格线
                 border: "1px solid var(--dsw-alias-border-l2, #eee)",
-                background: "var(--dsw-alias-bg-layer-2, #fafafa)",
+                background: "var(--dsw-alias-bg-module-platform, #fff)",
                 fontWeight: 600,
                 whiteSpace: "nowrap",
             },
