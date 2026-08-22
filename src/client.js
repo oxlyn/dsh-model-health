@@ -179,33 +179,49 @@ window.__ModuleLoader__.load({
                 fontSize: 12,
                 fontFamily: "var(--ds-font-family-code, monospace)",
             },
-            badge: {
-                display: "inline-block",
-                padding: "2px 8px",
-                borderRadius: 10,
+            statusWrap: {
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
                 fontSize: 12,
-                fontWeight: 500,
                 whiteSpace: "nowrap",
             },
-            badgeOk: {
-                background: "var(--dsw-alias-state-success-bg, #e6f4ea)",
-                color: "var(--dsw-alias-state-success-primary, #1e8e3e)",
+            statusTextIdle: {
+                color: "var(--dsw-alias-label-tertiary, #999)",
             },
-            badgeFail: {
-                background: "var(--dsw-alias-state-error-bg, #fce8e6)",
-                color: "var(--dsw-alias-state-error-primary, #d32f2f)",
-            },
-            badgeTesting: {
-                background: "var(--dsw-alias-state-info-bg, #e8f0fe)",
+            statusTextTesting: {
                 color: "var(--dsw-alias-state-info-primary, #1967d2)",
             },
-            badgeSkip: {
-                background: "var(--dsw-alias-bg-layer-2, #f0f0f0)",
+            statusTextOk: {
+                color: "var(--dsw-alias-state-success-primary, #1e8e3e)",
+            },
+            statusTextFail: {
+                color: "var(--dsw-alias-state-error-primary, #d32f2f)",
+            },
+            statusTextSkip: {
                 color: "var(--dsw-alias-label-tertiary, #888)",
             },
-            badgeIdle: {
-                background: "var(--dsw-alias-bg-layer-2, #f0f0f0)",
-                color: "var(--dsw-alias-label-tertiary, #999)",
+            dot: {
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                flex: "none",
+            },
+            dotIdle: {
+                background: "var(--dsw-alias-label-dimmed, #bbb)",
+            },
+            dotTesting: {
+                background: "var(--dsw-alias-state-info-primary, #1967d2)",
+                animation: "dsmh-pulse 1s ease-in-out infinite",
+            },
+            dotOk: {
+                background: "var(--dsw-alias-state-success-primary, #1e8e3e)",
+            },
+            dotFail: {
+                background: "var(--dsw-alias-state-error-primary, #d32f2f)",
+            },
+            dotSkip: {
+                background: "var(--dsw-alias-label-dimmed, #bbb)",
             },
             center: {
                 textAlign: "center",
@@ -265,13 +281,31 @@ window.__ModuleLoader__.load({
             fail: "statusFail",
             skip: "statusSkip",
         };
-        const STATUS_STYLE = {
-            idle: STYLES.badgeIdle,
-            testing: STYLES.badgeTesting,
-            ok: STYLES.badgeOk,
-            fail: STYLES.badgeFail,
-            skip: STYLES.badgeSkip,
+        // 状态 → 圆点颜色 / 文字颜色映射（圆点 + 彩色文字；测试中圆点带脉冲动画）
+        const STATUS_DOT_STYLE = {
+            idle: STYLES.dotIdle,
+            testing: STYLES.dotTesting,
+            ok: STYLES.dotOk,
+            fail: STYLES.dotFail,
+            skip: STYLES.dotSkip,
         };
+        const STATUS_TEXT_STYLE = {
+            idle: STYLES.statusTextIdle,
+            testing: STYLES.statusTextTesting,
+            ok: STYLES.statusTextOk,
+            fail: STYLES.statusTextFail,
+            skip: STYLES.statusTextSkip,
+        };
+
+        /** 注入测试中圆点的脉冲动画 keyframes（内联样式无法定义 @keyframes）。 */
+        function ensureStatusCss() {
+            const id = "dsh-model-health-status-style";
+            if (document.getElementById(id)) return;
+            const el = document.createElement("style");
+            el.id = id;
+            el.textContent = "@keyframes dsmh-pulse { 0%,100% { opacity:1; } 50% { opacity:.25; } }";
+            document.head.appendChild(el);
+        }
 
         /**
          * 模型列表 section 组件。
@@ -562,7 +596,8 @@ window.__ModuleLoader__.load({
                                     const tr = testResults[row.key] || { status: "idle" };
                                     const labelKey = STATUS_LABEL[tr.status];
                                     const statusLabel = labelKey ? t(labelKey) : tr.status;
-                                    const statusStyle = STATUS_STYLE[tr.status] || STYLES.badgeIdle;
+                                    const dotStyle = STATUS_DOT_STYLE[tr.status] || STYLES.dotIdle;
+                                    const textStyle = STATUS_TEXT_STYLE[tr.status] || STYLES.statusTextIdle;
                                     const latencyText = tr.latency != null ? `${tr.latency}ms` : "-";
                                     return h("tr", { key: (row.modelId || "") + i },
                                         visibleCols.map((col) => {
@@ -583,8 +618,8 @@ window.__ModuleLoader__.load({
                                                 },
                                                     h("span", {
                                                         style: {
-                                                            ...STYLES.badge,
-                                                            ...statusStyle,
+                                                            ...STYLES.statusWrap,
+                                                            ...textStyle,
                                                             cursor: hasError ? "help" : "default",
                                                         },
                                                         onMouseEnter: hasError
@@ -607,7 +642,9 @@ window.__ModuleLoader__.load({
                                                         onMouseLeave: hasError
                                                             ? () => setTooltip(null)
                                                             : undefined,
-                                                    }, statusLabel)
+                                                    },
+                                                        h("span", { style: { ...STYLES.dot, ...dotStyle } }),
+                                                        statusLabel)
                                                 );
                                             }
                                             if (col.key === "_latency") {
@@ -662,6 +699,7 @@ window.__ModuleLoader__.load({
          * @param {import('@deepseek-ai/dsh-client-runtime/client').ClientContext} ctx
          */
         function apply(ctx) {
+            ensureStatusCss();
             // 注册 zh/en 词典；t 每次调用读取当前激活语言
             ctx.effect(() => ctx.locale.register(NS, { zh, en }), "dsh-model-health: dictionaries");
             const t = ctx.locale.bind(NS);
