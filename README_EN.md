@@ -108,6 +108,10 @@ dsh-model-health/
 - `@deepseek-ai/dsh-tools`: `0.1.0-rc.8` (exact — the **`next`**-tag line; npm `latest` is stale).
 - `@deepseek-ai/cordis`: `^4.0.1` (peerDependency — host provides it; types-only in code).
 
+## Links
+
+- [Linux.do](https://linux.do)
+
 ## License
 
 [MIT](LICENSE)
