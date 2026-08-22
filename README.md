@@ -109,7 +109,7 @@ dsh-model-health/
 
 ## 友情链接 / Links
 
-- [Linux.do](https://linux.do) — LD 站
+- [LinuxDo](https://linux.do)
 
 ## License
 

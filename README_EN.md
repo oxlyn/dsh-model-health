@@ -110,7 +110,7 @@ dsh-model-health/
 
 ## Links
 
-- [Linux.do](https://linux.do)
+- [LinuxDo](https://linux.do)
 
 ## License
 
