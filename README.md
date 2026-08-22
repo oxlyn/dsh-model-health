@@ -4,8 +4,41 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](#license)
 
 > DeepSeek Harness (DSH) 插件：在设置页提供「模型健康」面板——列出所有已配置模型，并一键批量测试可用性与延迟。
+>
+> English documentation: [README_EN](README_EN.md)
 
 ![模型健康面板](snapshot.png)
+
+## 安装 / Install
+
+### npm 安装（推荐）
+
+```sh
+dsh plugin --profile web add dsh-model-health
+```
+
+### 源码安装
+
+```sh
+git clone https://github.com/oxlyn/dsh-model-health.git
+cd dsh-model-health
+pnpm install
+pnpm run build        # tsc → dist/index.js (pure ESM) + dist/client.js
+
+# 在插件的父目录执行（dsh plugin add 的相对路径锚定调用目录）：
+cd ..
+dsh plugin --profile web add ./dsh-model-health
+dsh web
+# 启动日志应出现：[dsh-model-health] ready — tool "list_models" + routes GET /api/model-health/json, POST /api/model-health/test
+```
+
+### 验证 / Verify
+
+安装后打开 `dsh web` → 设置 → 模型健康，应能看到已配置模型表格。无 API key 也可验证插件加载：
+
+```sh
+dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
+```
 
 ## 功能 / Features
 
@@ -45,37 +78,6 @@
 ```
 
 技术要点：纯 ESM（`"type": "module"`）、cordis 作为 peerDependency 由宿主提供（仅编译期 import type）、服务依赖通过 `export const inject = ['tools', 'webServer', 'credentials']` 声明。
-
-## 安装 / Install
-
-### npm 安装（推荐）
-
-```sh
-dsh plugin --profile web add dsh-model-health
-```
-
-### 源码安装
-
-```sh
-git clone https://github.com/oxlyn/dsh-model-health.git
-cd dsh-model-health
-pnpm install
-pnpm run build        # tsc → dist/index.js (pure ESM) + dist/client.js
-
-# 在插件的父目录执行（dsh plugin add 的相对路径锚定调用目录）：
-cd ..
-dsh plugin --profile web add ./dsh-model-health
-dsh web
-# 启动日志应出现：[dsh-model-health] ready — tool "list_models" + routes GET /api/model-health/json, POST /api/model-health/test
-```
-
-### 验证 / Verify
-
-安装后打开 `dsh web` → 设置 → 模型健康，应能看到已配置模型表格。无 API key 也可验证插件加载：
-
-```sh
-dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
-```
 
 ## 环境要求 / Requirements
 
