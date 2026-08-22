@@ -1,0 +1,498 @@
+// dsh-model-list — client 模块：在设置页注入"模型列表"section。
+//
+// 格式：window.__ModuleLoader__.load({ id, factory: (require) => {...} })
+// 这是 DSH 浏览器侧的模块加载器格式，factory 内用 require() 获取依赖。
+//
+// 注册一个 settings.section slot，组件通过 fetch /api/model-list/json 获取
+// 模型列表 JSON，然后用 React 直接渲染表格。
+// 支持"测试全部"：并发 POST /api/model-list/test，逐个更新测试状态。
+//
+window.__ModuleLoader__.load({
+    id: "my-dsh-plugin",
+    factory: (require) => {
+        var module = { exports: {} };
+        var exports = module.exports;
+
+        const React = require("react");
+        const { useState, useEffect, useCallback } = React;
+
+        // 内联样式（适配 DSH 明暗主题的 CSS 变量）
+        const STYLES = {
+            wrap: {
+                maxWidth: 1100,
+                color: "var(--dsw-alias-label-primary, #333)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+            },
+            head: {
+                display: "flex",
+                alignItems: "baseline",
+                gap: 8,
+                flexWrap: "wrap",
+            },
+            title: {
+                margin: 0,
+                fontSize: 16,
+                fontWeight: 500,
+                lineHeight: "24px",
+            },
+            count: {
+                display: "inline-block",
+                background: "var(--dsw-alias-button-primary-fill, #4f46e5)",
+                color: "var(--dsw-alias-label-primary-foreground, #fff)",
+                padding: "2px 10px",
+                borderRadius: 12,
+                fontSize: 12,
+            },
+            toolbar: {
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexWrap: "wrap",
+            },
+            meta: {
+                color: "var(--dsw-alias-label-tertiary, #888)",
+                fontSize: 13,
+                marginRight: "auto",
+            },
+            btn: {
+                boxSizing: "border-box",
+                height: 28,
+                padding: "0 14px",
+                fontSize: 12,
+                lineHeight: "18px",
+                cursor: "pointer",
+                border: "1px solid var(--dsw-alias-border-l2, #ddd)",
+                borderRadius: 14,
+                background: "transparent",
+                color: "var(--dsw-alias-label-primary, #333)",
+            },
+            btnPrimary: {
+                background: "var(--dsw-alias-button-primary-fill, #4f46e5)",
+                color: "var(--dsw-alias-label-primary-foreground, #fff)",
+                border: "none",
+            },
+            btnDisabled: {
+                opacity: 0.5,
+                cursor: "not-allowed",
+            },
+            progress: {
+                fontSize: 12,
+                color: "var(--dsw-alias-label-tertiary, #888)",
+            },
+            table: {
+                width: "100%",
+                borderCollapse: "collapse",
+                background: "var(--dsw-alias-bg-module-platform, #fff)",
+                borderRadius: 8,
+                overflow: "hidden",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                fontSize: 14,
+            },
+            th: {
+                padding: "10px 12px",
+                textAlign: "left",
+                borderBottom: "1px solid var(--dsw-alias-border-l2, #eee)",
+                background: "var(--dsw-alias-bg-layer-2, #fafafa)",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+            },
+            td: {
+                padding: "10px 12px",
+                textAlign: "left",
+                borderBottom: "1px solid var(--dsw-alias-border-l2, #eee)",
+                color: "var(--dsw-alias-label-primary, #333)",
+            },
+            code: {
+                background: "var(--dsw-alias-bg-layer-2, #f0f0f0)",
+                padding: "2px 6px",
+                borderRadius: 3,
+                fontSize: 12,
+                fontFamily: "var(--ds-font-family-code, monospace)",
+            },
+            badge: {
+                display: "inline-block",
+                padding: "2px 8px",
+                borderRadius: 10,
+                fontSize: 12,
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+            },
+            badgeOk: {
+                background: "var(--dsw-alias-state-success-bg, #e6f4ea)",
+                color: "var(--dsw-alias-state-success-primary, #1e8e3e)",
+            },
+            badgeFail: {
+                background: "var(--dsw-alias-state-error-bg, #fce8e6)",
+                color: "var(--dsw-alias-state-error-primary, #d32f2f)",
+            },
+            badgeTesting: {
+                background: "var(--dsw-alias-state-info-bg, #e8f0fe)",
+                color: "var(--dsw-alias-state-info-primary, #1967d2)",
+            },
+            badgeSkip: {
+                background: "var(--dsw-alias-bg-layer-2, #f0f0f0)",
+                color: "var(--dsw-alias-label-tertiary, #888)",
+            },
+            badgeIdle: {
+                background: "var(--dsw-alias-bg-layer-2, #f0f0f0)",
+                color: "var(--dsw-alias-label-tertiary, #999)",
+            },
+            center: {
+                textAlign: "center",
+                color: "var(--dsw-alias-label-tertiary, #999)",
+                padding: "40px 0",
+            },
+            error: {
+                color: "var(--dsw-alias-state-error-primary, #d32f2f)",
+                padding: "16px",
+            },
+            loading: {
+                color: "var(--dsw-alias-label-tertiary, #999)",
+                padding: "24px 0",
+                textAlign: "center",
+            },
+            errorMsg: {
+                color: "var(--dsw-alias-state-error-primary, #d32f2f)",
+                fontSize: 12,
+                maxWidth: 200,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+            },
+            colToggleLabel: {
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                fontSize: 12,
+                cursor: "pointer",
+                color: "var(--dsw-alias-label-secondary, #555)",
+                userSelect: "none",
+            },
+            colToggleCheckbox: {
+                cursor: "pointer",
+            },
+        };
+
+        // 列定义：optional=true 的列默认不显示，由多选框控制
+        const COLUMNS = [
+            { key: "_idx", label: "#" },
+            { key: "provider", label: "Provider" },
+            { key: "modelId", label: "模型 ID", code: true, optional: true },
+            { key: "modelName", label: "名称" },
+            { key: "contextWindow", label: "上下文窗口", optional: true },
+            { key: "maxTokens", label: "最大输出", optional: true },
+            { key: "input", label: "输入模态", optional: true },
+            { key: "api", label: "API 协议", optional: true },
+            { key: "baseURL", label: "BaseURL", code: true, optional: true },
+            { key: "_status", label: "状态" },
+            { key: "_latency", label: "延迟" },
+        ];
+
+        // 状态标签映射
+        const STATUS_LABEL = {
+            idle: "未测试",
+            testing: "测试中",
+            ok: "可用",
+            fail: "不可用",
+            skip: "跳过",
+        };
+        const STATUS_STYLE = {
+            idle: STYLES.badgeIdle,
+            testing: STYLES.badgeTesting,
+            ok: STYLES.badgeOk,
+            fail: STYLES.badgeFail,
+            skip: STYLES.badgeSkip,
+        };
+
+        /**
+         * 模型列表 section 组件。
+         * fetch /api/model-list/json 获取数据 → React 渲染表格。
+         * "测试全部" → 并发 POST /api/model-list/test，逐个更新状态。
+         */
+        function ModelListSection() {
+            const [state, setState] = useState({
+                loading: true,
+                error: null,
+                data: null,
+            });
+            // testResults: { [index]: { status, latency?, error? } }
+            const [testResults, setTestResults] = useState({});
+            const [testing, setTesting] = useState(false);
+            const [progress, setProgress] = useState({ done: 0, total: 0 });
+            // 可选列显示状态：{ [colKey]: boolean }，默认 false
+            const [optionalCols, setOptionalCols] = useState({});
+
+            const loadData = useCallback(async () => {
+                setState((s) => ({ ...s, loading: true, error: null }));
+                try {
+                    const resp = await fetch("/api/model-list/json", { cache: "no-store" });
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    const json = await resp.json();
+                    if (!json.ok) throw new Error(json.error || "未知错误");
+                    setState({ loading: false, error: null, data: json });
+                    setTestResults({}); // 重新加载时清空测试结果
+                } catch (e) {
+                    setState({ loading: false, error: e.message, data: null });
+                }
+            }, []);
+
+            useEffect(() => {
+                loadData();
+            }, [loadData]);
+
+            // 测试全部：并发发起所有测试请求，每个完成即更新对应行状态
+            const testAll = useCallback(async () => {
+                const data = state.data;
+                if (!data || !data.models || data.models.length === 0) return;
+                const total = data.models.length;
+                setTesting(true);
+                setProgress({ done: 0, total });
+                // 初始化所有为 testing
+                const init = {};
+                for (let i = 0; i < total; i++) init[i] = { status: "testing" };
+                setTestResults(init);
+
+                let done = 0;
+                // 并发测试，但限制并发数避免压垮 host/网络
+                const CONCURRENCY = 6;
+                const indices = Array.from({ length: total }, (_, i) => i);
+                const queue = [...indices];
+
+                async function runOne(idx) {
+                    try {
+                        const resp = await fetch("/api/model-list/test", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ index: idx }),
+                            cache: "no-store",
+                        });
+                        const json = await resp.json();
+                        if (!json.ok) {
+                            setTestResults((s) => ({
+                                ...s,
+                                [idx]: { status: "fail", error: json.error },
+                            }));
+                        } else {
+                            setTestResults((s) => ({
+                                ...s,
+                                [idx]: {
+                                    status: json.status || "fail",
+                                    latency: json.latency,
+                                    error: json.error,
+                                },
+                            }));
+                        }
+                    } catch (e) {
+                        setTestResults((s) => ({
+                            ...s,
+                            [idx]: { status: "fail", error: e.message },
+                        }));
+                    } finally {
+                        done++;
+                        setProgress({ done, total });
+                        if (done >= total) setTesting(false);
+                    }
+                }
+
+                // 限制并发的 worker pool
+                async function worker() {
+                    while (queue.length > 0) {
+                        const idx = queue.shift();
+                        if (idx === undefined) break;
+                        await runOne(idx);
+                    }
+                }
+                const workers = Array.from(
+                    { length: Math.min(CONCURRENCY, total) },
+                    () => worker()
+                );
+                await Promise.all(workers);
+            }, [state.data]);
+
+            const h = React.createElement;
+
+            if (state.loading) {
+                return h("div", { style: STYLES.wrap },
+                    h("div", { style: STYLES.loading }, "加载中...")
+                );
+            }
+
+            if (state.error) {
+                return h("div", { style: STYLES.wrap },
+                    h("div", { style: STYLES.error },
+                        "读取模型列表失败：", state.error
+                    ),
+                    h("button", {
+                        style: STYLES.btn,
+                        onClick: loadData,
+                    }, "重试")
+                );
+            }
+
+            const data = state.data || { models: [], count: 0, source: "", updatedAt: "" };
+            const models = data.models || [];
+            const updatedAt = new Date(data.updatedAt || Date.now()).toLocaleString("zh-CN");
+
+            // 统计测试结果
+            const stats = { ok: 0, fail: 0, skip: 0, testing: 0 };
+            for (const k in testResults) {
+                const s = testResults[k].status;
+                if (s === "ok") stats.ok++;
+                else if (s === "fail") stats.fail++;
+                else if (s === "skip") stats.skip++;
+                else if (s === "testing") stats.testing++;
+            }
+
+            // 可见列：非可选列始终显示；可选列根据 optionalCols 状态
+            const visibleCols = COLUMNS.filter(
+                (col) => !col.optional || optionalCols[col.key]
+            );
+            const optionalColumns = COLUMNS.filter((col) => col.optional);
+
+            const toggleCol = (key) => {
+                setOptionalCols((s) => ({ ...s, [key]: !s[key] }));
+            };
+
+            return h("div", { style: STYLES.wrap },
+                h("div", { style: STYLES.head },
+                    h("h2", { style: STYLES.title }, "已配置模型"),
+                    h("span", { style: STYLES.count }, data.count || models.length)
+                ),
+                h("div", { style: STYLES.toolbar },
+                    h("span", { style: STYLES.meta },
+                        "来源：", data.source || "settings.yaml",
+                        " · 更新时间：", updatedAt
+                    ),
+                    // 测试统计
+                    (stats.ok + stats.fail + stats.skip > 0) && h("span", { style: STYLES.progress },
+                        `✓ ${stats.ok}  ✗ ${stats.fail}`,
+                        stats.skip > 0 ? `  ⊘ ${stats.skip}` : ""
+                    ),
+                    testing && h("span", { style: STYLES.progress },
+                        `${progress.done}/${progress.total}`
+                    ),
+                    // 测试全部按钮
+                    h("button", {
+                        style: {
+                            ...STYLES.btn,
+                            ...STYLES.btnPrimary,
+                            ...(testing ? STYLES.btnDisabled : {}),
+                        },
+                        disabled: testing || models.length === 0,
+                        onClick: testAll,
+                    }, testing ? "测试中..." : "测试全部"),
+                    // 刷新列表按钮
+                    h("button", {
+                        style: { ...STYLES.btn, ...(testing ? STYLES.btnDisabled : {}) },
+                        disabled: testing,
+                        onClick: loadData,
+                    }, "刷新列表")
+                ),
+                // 可选列 toggle 按钮组
+                h("div", { style: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" } },
+                    h("span", { style: { fontSize: 12, color: "var(--dsw-alias-label-tertiary, #888)" } },
+                        "显示列："
+                    ),
+                    optionalColumns.map((col) => {
+                        const active = !!optionalCols[col.key];
+                        return h("button", {
+                            key: col.key,
+                            onClick: () => toggleCol(col.key),
+                            style: {
+                                boxSizing: "border-box",
+                                height: 24,
+                                padding: "0 10px",
+                                fontSize: 12,
+                                cursor: "pointer",
+                                border: active
+                                    ? "1px solid var(--dsw-alias-button-primary-fill, #4f46e5)"
+                                    : "1px solid var(--dsw-alias-border-l2, #ddd)",
+                                borderRadius: 12,
+                                background: active
+                                    ? "var(--dsw-alias-button-primary-fill, #4f46e5)"
+                                    : "transparent",
+                                color: active
+                                    ? "var(--dsw-alias-label-primary-foreground, #fff)"
+                                    : "var(--dsw-alias-label-secondary, #555)",
+                            },
+                        }, col.label);
+                    })
+                ),
+                models.length === 0
+                    ? h("div", { style: STYLES.center },
+                        "未配置任何模型，请在 设置 → 模型 中添加。"
+                    )
+                    : h("table", { style: STYLES.table },
+                        h("thead", null,
+                            h("tr", null,
+                                visibleCols.map((col) =>
+                                    h("th", { key: col.key, style: STYLES.th }, col.label)
+                                )
+                            )
+                        ),
+                        h("tbody", null,
+                            models.map((row, i) => {
+                                const tr = testResults[i] || { status: "idle" };
+                                const statusLabel = STATUS_LABEL[tr.status] || tr.status;
+                                const statusStyle = STATUS_STYLE[tr.status] || STYLES.badgeIdle;
+                                const latencyText = tr.latency != null ? `${tr.latency}ms` : "-";
+                                return h("tr", { key: (row.modelId || "") + i },
+                                    visibleCols.map((col) => {
+                                        if (col.key === "_idx") {
+                                            return h("td", { key: col.key, style: STYLES.td }, String(i + 1));
+                                        }
+                                        if (col.key === "_status") {
+                                            return h("td", { key: col.key, style: STYLES.td },
+                                                h("span", {
+                                                    style: { ...STYLES.badge, ...statusStyle },
+                                                    title: tr.error || "",
+                                                }, statusLabel)
+                                            );
+                                        }
+                                        if (col.key === "_latency") {
+                                            return h("td", { key: col.key, style: STYLES.td }, latencyText);
+                                        }
+                                        const value = row[col.key] ?? "-";
+                                        return h("td", {
+                                            key: col.key,
+                                            style: STYLES.td,
+                                        },
+                                            col.code
+                                                ? h("code", { style: STYLES.code }, String(value))
+                                                : String(value)
+                                        );
+                                    })
+                                );
+                            })
+                        )
+                    )
+            );
+        }
+
+        // client 侧依赖：slots（注册 UI slot 的服务）
+        const inject = ["slots"];
+
+        /**
+         * @param {import('@deepseek-ai/dsh-client-runtime/client').ClientContext} ctx
+         */
+        function apply(ctx) {
+            ctx.slots.inject("settings.section", () =>
+                ctx.slots.register(
+                    {
+                        name: "settings.section",
+                        id: "model-list",
+                        order: 50,
+                        label: "模型列表",
+                    },
+                    ModelListSection
+                )
+            );
+        }
+
+        exports.apply = apply;
+        exports.inject = inject;
+        return module.exports;
+    }
+});
