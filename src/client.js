@@ -17,7 +17,7 @@ window.__ModuleLoader__.load({
         var exports = module.exports;
 
         const React = require("react");
-        const { useState, useEffect, useCallback } = React;
+        const { useState, useEffect, useCallback, useRef } = React;
 
         // ── 多语言词典（locale 服务，语言跟随 harness）─────────────────────────
         const NS = "dsh-model-health";
@@ -48,6 +48,8 @@ window.__ModuleLoader__.load({
             statusOk: "可用",
             statusFail: "不可用",
             statusSkip: "跳过",
+            testOne: "测试",
+            testOneTip: "点击测试此模型",
         };
         const en = {
             tab: "Model Health",
@@ -76,6 +78,8 @@ window.__ModuleLoader__.load({
             statusOk: "Available",
             statusFail: "Unavailable",
             statusSkip: "Skipped",
+            testOne: "Test",
+            testOneTip: "Click to test this model",
         };
 
         // 内联样式（适配 DSH 明暗主题的 CSS 变量）
@@ -138,6 +142,20 @@ window.__ModuleLoader__.load({
             btnDisabled: {
                 opacity: 0.5,
                 cursor: "not-allowed",
+            },
+            // 状态列里的"测试"小按钮（未测试的模型显示它代替"未测试"文字）
+            btnTestSmall: {
+                boxSizing: "border-box",
+                height: 22,
+                padding: "0 12px",
+                fontSize: 12,
+                lineHeight: "16px",
+                cursor: "pointer",
+                border: "1px solid var(--dsw-alias-button-primary-fill, #4f46e5)",
+                borderRadius: 11,
+                background: "transparent",
+                color: "var(--dsw-alias-button-primary-fill, #4f46e5)",
+                whiteSpace: "nowrap",
             },
             progress: {
                 fontSize: 12,
@@ -355,6 +373,9 @@ window.__ModuleLoader__.load({
             // 初始值从 localStorage 读取，实现跨刷新持久化
             const [testResults, setTestResults] = useState(loadStoredResults);
             const [testing, setTesting] = useState(false);
+            // 请求序号：同一模型重复触发测试（单测 + 测试全部并发）时，
+            // 只有最新一次请求的结果允许写入，避免旧响应覆盖新状态
+            const seqRef = useRef({});
             const [progress, setProgress] = useState({ done: 0, total: 0 });
             // 可选列显示状态：{ [colKey]: boolean }，默认 false
             const [optionalCols, setOptionalCols] = useState({});
@@ -386,6 +407,42 @@ window.__ModuleLoader__.load({
                 loadData();
             }, [loadData]);
 
+            // 测试单个模型：该行置为 testing → POST /api/model-health/test → 写回结果
+            // （"测试全部"与状态列的"测试"按钮共用此逻辑）
+            const testModel = useCallback(async (key) => {
+                const seq = (seqRef.current[key] || 0) + 1;
+                seqRef.current[key] = seq;
+                setTestResults((s) => ({ ...s, [key]: { status: "testing" } }));
+
+                let result;
+                try {
+                    const resp = await fetch("/api/model-health/test", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ key }),
+                        cache: "no-store",
+                    });
+                    const json = await resp.json();
+                    result = !json.ok
+                        ? { status: "fail", error: json.error }
+                        : {
+                            status: json.status || "fail",
+                            latency: json.latency,
+                            error: json.error,
+                        };
+                } catch (e) {
+                    result = { status: "fail", error: e.message };
+                }
+
+                // 期间若同一模型又发起了更新的测试，丢弃这份过期结果
+                if (seqRef.current[key] !== seq) return;
+                setTestResults((s) => {
+                    const next = { ...s, [key]: result };
+                    saveStoredResults(next);
+                    return next;
+                });
+            }, []);
+
             // 测试全部：并发发起所有测试请求，每个完成即更新对应行状态
             const testAll = useCallback(async () => {
                 const data = state.data;
@@ -393,59 +450,20 @@ window.__ModuleLoader__.load({
                 const total = data.models.length;
                 setTesting(true);
                 setProgress({ done: 0, total });
-                // 初始化所有为 testing（按 provider/modelId key）
-                const init = {};
-                for (const m of data.models) init[m.key] = { status: "testing" };
-                setTestResults(init);
-                saveStoredResults(init);
 
                 let done = 0;
                 // 并发测试，但限制并发数避免压垮 host/网络
                 const CONCURRENCY = 6;
                 const queue = data.models.map((m) => m.key);
 
-                // 更新单个结果并同步到 localStorage
-                function updateResult(key, result) {
-                    setTestResults((s) => {
-                        const next = { ...s, [key]: result };
-                        saveStoredResults(next);
-                        return next;
-                    });
-                }
-
-                async function runOne(key) {
-                    try {
-                        const resp = await fetch("/api/model-health/test", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ key }),
-                            cache: "no-store",
-                        });
-                        const json = await resp.json();
-                        if (!json.ok) {
-                            updateResult(key, { status: "fail", error: json.error });
-                        } else {
-                            updateResult(key, {
-                                status: json.status || "fail",
-                                latency: json.latency,
-                                error: json.error,
-                            });
-                        }
-                    } catch (e) {
-                        updateResult(key, { status: "fail", error: e.message });
-                    } finally {
-                        done++;
-                        setProgress({ done, total });
-                        if (done >= total) setTesting(false);
-                    }
-                }
-
-                // 限制并发的 worker pool
                 async function worker() {
                     while (queue.length > 0) {
                         const key = queue.shift();
                         if (key === undefined) break;
-                        await runOne(key);
+                        await testModel(key);
+                        done++;
+                        setProgress({ done, total });
+                        if (done >= total) setTesting(false);
                     }
                 }
                 const workers = Array.from(
@@ -453,7 +471,7 @@ window.__ModuleLoader__.load({
                     () => worker()
                 );
                 await Promise.all(workers);
-            }, [state.data]);
+            }, [state.data, testModel]);
 
             const h = React.createElement;
 
@@ -611,6 +629,19 @@ window.__ModuleLoader__.load({
                                                 }, row.provider);
                                             }
                                             if (col.key === "_status") {
+                                                // 未测试：显示可点击的"测试"按钮，点击即测单个模型
+                                                if (tr.status === "idle") {
+                                                    return h("td", {
+                                                        key: col.key,
+                                                        style: STYLES.td,
+                                                    },
+                                                        h("button", {
+                                                            style: STYLES.btnTestSmall,
+                                                            title: t("testOneTip"),
+                                                            onClick: () => testModel(row.key),
+                                                        }, t("testOne"))
+                                                    );
+                                                }
                                                 const hasError = tr.error && tr.status === "fail";
                                                 return h("td", {
                                                     key: col.key,
