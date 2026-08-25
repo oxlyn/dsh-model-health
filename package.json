@@ -1,6 +1,6 @@
 {
   "name": "dsh-model-health",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "DSH plugin that lists all configured models with availability/latency testing, by reading $DSH_HOME/settings.yaml.",
   "license": "MIT",
   "repository": {
