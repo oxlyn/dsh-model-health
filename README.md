@@ -47,7 +47,7 @@ dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
 | # | 形式 | 入口 | 说明 |
 |---|------|------|------|
 | 1 | 「模型健康」面板 | Web UI → 设置 → 模型健康 | React 表格：Provider / 模型 ID / 名称 / 上下文窗口 / 最大输出 / 输入模态 / API 协议 / BaseURL，可选列可切换显示 |
-| 2 | 测试全部 | 面板内「测试全部」按钮 | 并发（上限 6）对每个模型发一次 `max_tokens=1` 的最小 chat completions 请求，10s 超时；逐行显示 可用 / 不可用 / 跳过 / 延迟，失败原因悬停查看，结果持久化到 localStorage |
+| 2 | 测试全部 | 面板内「测试全部」按钮 | 并发（上限 6）对每个模型发一次 `max_tokens=1` 的最小 chat completions 请求，10s 超时；逐行显示 可用 / 不可用 / 跳过 / 延迟，失败原因悬停查看，结果持久化到 localStorage。已出结果的徽章可点击，单独重测该模型（悬停出现 ↻） |
 | 3 | Tool 插件 `list_models` | 对话中调用 | 返回 Markdown 表格，供模型在对话中查看模型清单 |
 
 **特性一览：**
@@ -56,6 +56,7 @@ dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
 - 可用性测试支持 `openai-completions` 与 `deepseek` 协议，其余协议自动标记「跳过」
 - API Key 通过 DSH credential service（`ctx.credentials.resolve`）解析，密钥不会输出到浏览器
 - 测试结果（状态/延迟/错误）持久化到 localStorage，刷新页面后仍可见
+- 状态列的 可用 / 不可用 / 跳过 徽章随时可点击，对单个模型重新测试，原地刷新状态与延迟
 
 ## 实现方式 / How it works
 

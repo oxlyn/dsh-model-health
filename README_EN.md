@@ -48,7 +48,7 @@ Reads `$DSH_HOME/settings.yaml` (default `~/.dsh/settings.yaml`) and provides th
 | # | Form | Entry | Description |
 |---|------|-------|-------------|
 | 1 | "Model Health" panel | Web UI → Settings → Model Health | React table: Provider / Model ID / Name / Context Window / Max Output / Input Modalities / API Protocol / BaseURL, with toggleable optional columns |
-| 2 | Test all | "Test All" button in the panel | Concurrently (max 6) sends a minimal `max_tokens=1` chat completions request per model with a 10s timeout; per-row status badges (OK / Fail / Skip / latency), failure details on hover, results persisted to localStorage |
+| 2 | Test all | "Test All" button in the panel | Concurrently (max 6) sends a minimal `max_tokens=1` chat completions request per model with a 10s timeout; per-row status badges (OK / Fail / Skip / latency), failure details on hover, results persisted to localStorage. Tested badges are clickable to re-test that single model (hover shows ↻) |
 | 3 | Tool `list_models` | Invoked in conversation | Returns a Markdown table so the model can view the configured model list in chat |
 
 **Highlights:**
@@ -57,6 +57,7 @@ Reads `$DSH_HOME/settings.yaml` (default `~/.dsh/settings.yaml`) and provides th
 - Availability testing supports `openai-completions` and `deepseek` protocols; other protocols are automatically marked "Skip"
 - API keys are resolved via the DSH credential service (`ctx.credentials.resolve`) and never exposed to the browser
 - Test results (status / latency / error) persist to localStorage across page refreshes
+- Status badges (Available / Unavailable / Skipped) are clickable at any time to re-test an individual model; status and latency refresh in place
 
 ## How it works
 

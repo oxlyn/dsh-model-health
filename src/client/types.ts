@@ -30,6 +30,7 @@ export interface Dict {
   statusSkip: string
   testOne: string
   testOneTip: string
+  retestTip: string
 }
 
 /** locale 服务：多语言词典注册 / 翻译 / 语言变更订阅（harness client runtime 提供） */

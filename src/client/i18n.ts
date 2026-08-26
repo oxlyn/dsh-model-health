@@ -34,6 +34,7 @@ export const zh: Dict = {
   statusSkip: '跳过',
   testOne: '测试',
   testOneTip: '点击测试此模型',
+  retestTip: '点击重新测试此模型',
 }
 
 export const en: Dict = {
@@ -65,4 +66,5 @@ export const en: Dict = {
   statusSkip: 'Skipped',
   testOne: 'Test',
   testOneTip: 'Click to test this model',
+  retestTip: 'Click to re-test this model',
 }

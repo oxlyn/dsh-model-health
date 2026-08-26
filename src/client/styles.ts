@@ -76,6 +76,18 @@ export const STYLES = {
     color: 'var(--dsw-alias-button-primary-fill, #4f46e5)',
     whiteSpace: 'nowrap',
   },
+  // 已出结果的状态徽章改为可点击重测：按钮外观重置为纯文字，
+  // 颜色沿用各状态文字色，hover 反馈（下划线/↻ 显形）由注入的 CSS 类提供
+  retestBtn: {
+    border: 'none',
+    background: 'transparent',
+    padding: 0,
+    margin: 0,
+    font: 'inherit',
+    fontSize: 12,
+    lineHeight: '16px',
+    textAlign: 'left',
+  },
   progress: {
     fontSize: 12,
     color: 'var(--dsw-alias-label-tertiary, #888)',
