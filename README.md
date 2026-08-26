@@ -57,6 +57,7 @@ dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
 - API Key 通过 DSH credential service（`ctx.credentials.resolve`）解析，密钥不会输出到浏览器
 - 测试结果（状态/延迟/错误）持久化到 localStorage，刷新页面后仍可见
 - 状态列的 可用 / 不可用 / 跳过 徽章随时可点击，对单个模型重新测试，原地刷新状态与延迟
+- 设置导航使用脉搏线（Activity）图标——宿主图标表没有「健康」类目，参考 dsh-better-sidebar 的方案，JS 精准打 marker，CSS 用 `::before` + `mask` 把齿轮 svg 原地替换；颜色随主题走
 
 ## 实现方式 / How it works
 
@@ -101,7 +102,7 @@ dsh-model-health/
 ├── src/host/               # host 实现：config / models / markdown / http / model-test
 ├── src/client.tsx          # client 入口壳：注入 React，装配插件导出
 ├── src/client/             # client 实现：types / runtime / i18n / storage / api /
-│                           #   styles / columns / use-test-results / apply
+│                           #   styles / columns / use-test-results / nav-icon / apply
 │   └── components/         # ModelListSection / StatusCell / ErrorTooltip
 ├── cordis.patch.yml        # bundle 层声明（id/name 走包名解析）
 └── dist/                   # 构建产物（发布包含在 files 字段中）

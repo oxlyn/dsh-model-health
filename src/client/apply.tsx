@@ -5,6 +5,7 @@ import type { ClientContext } from './types'
 import { getReact } from './runtime'
 import { NS, zh, en } from './i18n'
 import { ModelListSection } from './components/ModelListSection'
+import { registerSettingsNavIcon, ensureNavIconCss } from './nav-icon'
 
 /** client 侧依赖：slots（注册 UI slot 的服务）+ locale（多语言词典） */
 export const inject = ['slots', 'locale']
@@ -33,9 +34,18 @@ function ensureStatusCss(): void {
 export function apply(ctx: ClientContext): void {
   const React = getReact()
   ensureStatusCss()
+  ensureNavIconCss()
   // 注册 zh/en 词典；t 每次调用读取当前激活语言
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-model-health: dictionaries')
   const t = ctx.locale.bind(NS)
+
+  // 给本插件的设置导航行打 marker，CSS 用 mask 注入脉搏线图标。
+  // 必须先有 t 再 effect：marker 需要 label 解析器（locale 切换会重新求值）。
+  // effect 包装负责在 HMR / 插件卸载时执行返回的 disposer。
+  ctx.effect(
+    () => registerSettingsNavIcon(() => t('tab')),
+    'dsh-model-health: settings navigation icon',
+  )
 
   ctx.slots.inject('settings.section', () =>
     ctx.slots.register(

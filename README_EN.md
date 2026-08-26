@@ -58,6 +58,7 @@ Reads `$DSH_HOME/settings.yaml` (default `~/.dsh/settings.yaml`) and provides th
 - API keys are resolved via the DSH credential service (`ctx.credentials.resolve`) and never exposed to the browser
 - Test results (status / latency / error) persist to localStorage across page refreshes
 - Status badges (Available / Unavailable / Skipped) are clickable at any time to re-test an individual model; status and latency refresh in place
+- Settings nav uses a pulse (Activity) glyph — the host's icon table has no "health" category, so the plugin (following dsh-better-sidebar's pattern) marks its own row and the injected CSS swaps the fallback gear via a `::before` + `mask` rule; color follows the host theme
 
 ## How it works
 
@@ -102,7 +103,7 @@ dsh-model-health/
 ├── src/host/               # host impl: config / models / markdown / http / model-test
 ├── src/client.tsx          # client entry shell: injects React, assembles exports
 ├── src/client/             # client impl: types / runtime / i18n / storage / api /
-│                           #   styles / columns / use-test-results / apply
+│                           #   styles / columns / use-test-results / nav-icon / apply
 │   └── components/         # ModelListSection / StatusCell / ErrorTooltip
 ├── cordis.patch.yml      # bundle layer declaration (id/name resolve as package names)
 └── dist/                 # build output (included in the published files field)
