@@ -62,22 +62,25 @@ export const STYLES = {
     opacity: 0.5,
     cursor: 'not-allowed',
   },
-  // 状态列里的"测试"小按钮（未测试的模型显示它代替"未测试"文字）
-  btnTestSmall: {
-    boxSizing: 'border-box',
-    height: 22,
-    padding: '0 12px',
+  // 状态列里的"测试"文字链（未测试的模型用它代替醒目的按钮，
+  // 与已出结果的可点击徽章保持同一套"轻量可点文字"的视觉语言）
+  testLink: {
+    border: 'none',
+    background: 'transparent',
+    padding: 0,
+    margin: 0,
+    font: 'inherit',
     fontSize: 12,
     lineHeight: '16px',
+    textAlign: 'left',
+    color: 'var(--dsw-alias-label-secondary, #555)',
+    textDecoration: 'underline',
+    textUnderlineOffset: '3px',
     cursor: 'pointer',
-    border: '1px solid var(--dsw-alias-button-primary-fill, #4f46e5)',
-    borderRadius: 11,
-    background: 'transparent',
-    color: 'var(--dsw-alias-button-primary-fill, #4f46e5)',
     whiteSpace: 'nowrap',
   },
   // 已出结果的状态徽章改为可点击重测：按钮外观重置为纯文字，
-  // 颜色沿用各状态文字色，hover 反馈（下划线/↻ 显形）由注入的 CSS 类提供
+  // 颜色沿用各状态文字色，hover 反馈（下划线提示可点）由注入的 CSS 类提供
   retestBtn: {
     border: 'none',
     background: 'transparent',

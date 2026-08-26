@@ -1,8 +1,8 @@
 // 状态列单元格：
-// - 未测试（idle）→ 可点击「测试」按钮
+// - 未测试（idle）→ 可点击「测试」文字链
 // - 测试中（testing）→ 圆点 + 文字（不可点，避免重复触发）
 // - 已出结果（ok/fail/skip）→ 整个状态徽章可点击重新测试，
-//   hover 显示下划线与 ↻ 图标；失败且带错误信息时悬停触发全宽错误 tooltip
+//   hover 下划线提示可点；失败且带错误信息时悬停触发全宽错误 tooltip
 
 import { getReact } from '../runtime'
 import type { MouseEvent, ReactElement } from 'react'
@@ -25,13 +25,14 @@ export function StatusCell(props: StatusCellProps): ReactElement {
   const React = getReact()
   const { modelKey, result: tr, t, onTest, onErrorTip, onClearTip } = props
 
-  // 未测试：显示可点击的"测试"按钮，点击即测单个模型
+  // 未测试：显示"测试"文字链（下划线提示可点，hover 提亮为主题色）
   if (tr.status === 'idle') {
     return (
       <td style={STYLES.td}>
         <button
           type="button"
-          style={STYLES.btnTestSmall}
+          className="dsmh-test-link"
+          style={STYLES.testLink}
           title={t('testOneTip')}
           onClick={() => onTest(modelKey)}
         >
@@ -80,7 +81,6 @@ export function StatusCell(props: StatusCellProps): ReactElement {
         >
           <span style={{ ...STYLES.dot, ...STATUS_DOT_STYLE[tr.status] }} />
           <span className="dsmh-status-label">{statusLabel}</span>
-          <span className="dsmh-ico-retest" aria-hidden="true">↻</span>
         </button>
       </td>
     )

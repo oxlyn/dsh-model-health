@@ -17,14 +17,15 @@ function ensureStatusCss(): void {
   el.id = id
   el.textContent = `
 @keyframes dsmh-pulse { 0%,100% { opacity:1; } 50% { opacity:.25; } }
-/* 可点击重测的状态徽章：hover 下划线提示可点，↻ 常驻占位（opacity 0）避免 hover 时列宽跳动 */
+/* 可点击重测的状态徽章：hover/聚焦 下划线提示可点 */
 .dsmh-retest { cursor: pointer; }
 .dsmh-retest:hover .dsmh-status-label,
 .dsmh-retest:focus-visible .dsmh-status-label { text-decoration: underline; text-underline-offset: 3px; }
 .dsmh-retest:focus-visible { outline: 1px solid currentColor; outline-offset: 2px; border-radius: 2px; }
-.dsmh-ico-retest { opacity: 0; transition: opacity .15s ease; font-size: 11px; }
-.dsmh-retest:hover .dsmh-ico-retest,
-.dsmh-retest:focus-visible .dsmh-ico-retest { opacity: .8; }
+/* 未测试行的"测试"文字链：hover 提亮为主题色 */
+.dsmh-test-link { transition: color .15s ease; }
+.dsmh-test-link:hover,
+.dsmh-test-link:focus-visible { color: var(--dsw-alias-button-primary-fill, #4f46e5); }
 `
   document.head.appendChild(el)
 }
