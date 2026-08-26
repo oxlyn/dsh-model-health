@@ -96,10 +96,14 @@ pnpm run build       # 构建 dist/
 
 ```
 dsh-model-health/
-├── src/index.ts          # host 侧：tool + HTTP 路由
-├── src/client.tsx        # client 侧：设置页面板（TSX 浏览器模块）
-├── cordis.patch.yml      # bundle 层声明（id/name 走包名解析）
-└── dist/                 # 构建产物（发布包含在 files 字段中）
+├── src/index.ts            # host 入口：tool + HTTP 路由接线
+├── src/host/               # host 实现：config / models / markdown / http / model-test
+├── src/client.tsx          # client 入口壳：注入 React，装配插件导出
+├── src/client/             # client 实现：types / runtime / i18n / storage / api /
+│                           #   styles / columns / use-test-results / apply
+│   └── components/         # ModelListSection / StatusCell / ErrorTooltip
+├── cordis.patch.yml        # bundle 层声明（id/name 走包名解析）
+└── dist/                   # 构建产物（发布包含在 files 字段中）
 ```
 
 ## 依赖锁定 / Dependencies

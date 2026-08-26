@@ -19,8 +19,26 @@
 ```
 dsh-model-health/
 ├── src/
-│   ├── index.ts        # 服务端主入口（Tool + HTTP 路由）
-│   └── client.tsx      # 浏览器侧 React 组件（TSX，注入到设置页）
+│   ├── index.ts            # host 入口（Tool + HTTP 路由接线，薄装配层）
+│   ├── host/               # host 实现
+│   │   ├── config.ts       #   settings.yaml 读取/解析（mtime 缓存）
+│   │   ├── models.ts       #   模型收集 + toPublicRow
+│   │   ├── markdown.ts     #   list_models 表格渲染
+│   │   ├── http.ts         #   JSON 响应 / 请求体工具
+│   │   ├── model-test.ts   #   单模型测试 handler 工厂
+│   │   └── services.d.ts   #   webServer / credentials 类型补充
+│   ├── client.tsx          # 浏览器入口壳（注入 React，装配导出）
+│   └── client/             # client 实现
+│       ├── types.ts        #   领域类型 + 运行时服务接口
+│       ├── runtime.ts      #   React 注入容器（加载器契约解耦点）
+│       ├── i18n.ts         #   zh/en 词典
+│       ├── storage.ts      #   localStorage 持久化
+│       ├── api.ts          #   host HTTP API 封装
+│       ├── styles.ts       #   内联样式表
+│       ├── columns.ts      #   列定义 + 状态视觉映射
+│       ├── use-test-results.ts  # 测试状态机 hook
+│       ├── apply.tsx       #   服务接线（词典 + slot 注册）
+│       └── components/     #   ModelListSection / StatusCell / ErrorTooltip
 ├── cordis.patch.yml    # bundle 层 patch 声明（注册到 profile）
 ├── package.json        # 依赖、构建脚本、dsh 字段
 ├── tsconfig.json       # TypeScript 配置（ESM + bundler 解析）
@@ -29,7 +47,7 @@ dsh-model-health/
 ```
 
 构建产物（`dist/`）：
-- `dist/index.js` —— `tsc` 编译产物
+- `dist/index.js` —— tsdown 打包的 Node ESM（依赖外部化）
 - `dist/client.js` —— 由 tsdown 从 `src/client.tsx` 打包为 IIFE（JSX 编译为 React.createElement，react 运行时仍由 harness require() 提供）
 
 ## 三、核心功能
@@ -56,7 +74,7 @@ dsh-model-health/
 
 ## 四、客户端 UI
 
-`src/client.tsx` 通过 DSH 浏览器模块加载器 `window.__ModuleLoader__.load(...)` 注册，依赖 `slots` 服务，向 `settings.section` 注入一个名为"模型列表"的 section。
+`src/client.tsx` 是浏览器入口壳：通过 DSH 浏览器模块加载器 `window.__ModuleLoader__.load(...)` 注册，factory 内把宿主 React 注入 `client/runtime.ts` 容器；`apply()`（`client/apply.tsx`）向 `settings.section` 注入一个名为"模型列表"的 section。
 
 组件 `ModelListSection` 特性：
 

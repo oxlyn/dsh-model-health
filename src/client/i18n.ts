@@ -1,0 +1,68 @@
+// 多语言词典：zh/en 键位由 Dict 接口约束一一对应；
+// 通过官方 locale 服务注册，语言跟随 harness 设置，切换即时生效。
+
+import type { Dict } from './types'
+
+export const NS = 'dsh-model-health'
+
+export const zh: Dict = {
+  tab: '模型健康',
+  title: '已配置模型',
+  updatedAt: '更新时间：',
+  testAll: '测试全部',
+  testingBtn: '测试中...',
+  showCols: '显示列：',
+  loading: '加载中...',
+  loadError: '读取模型列表失败：',
+  retry: '重试',
+  unknownError: '未知错误',
+  empty: '未配置任何模型，请在 设置 → 模型 中添加。',
+  colProvider: 'Provider',
+  colModelId: '模型 ID',
+  colName: '名称',
+  colContextWindow: '上下文窗口',
+  colMaxTokens: '最大输出',
+  colInput: '输入模态',
+  colApi: 'API 协议',
+  colBaseURL: 'BaseURL',
+  colStatus: '状态',
+  colLatency: '延迟',
+  statusIdle: '未测试',
+  statusTesting: '测试中',
+  statusOk: '可用',
+  statusFail: '不可用',
+  statusSkip: '跳过',
+  testOne: '测试',
+  testOneTip: '点击测试此模型',
+}
+
+export const en: Dict = {
+  tab: 'Model Health',
+  title: 'Configured Models',
+  updatedAt: 'Updated: ',
+  testAll: 'Test All',
+  testingBtn: 'Testing...',
+  showCols: 'Columns: ',
+  loading: 'Loading...',
+  loadError: 'Failed to load model list: ',
+  retry: 'Retry',
+  unknownError: 'Unknown error',
+  empty: 'No models configured. Add one in Settings → Models.',
+  colProvider: 'Provider',
+  colModelId: 'Model ID',
+  colName: 'Name',
+  colContextWindow: 'Context Window',
+  colMaxTokens: 'Max Output',
+  colInput: 'Modalities',
+  colApi: 'API Protocol',
+  colBaseURL: 'BaseURL',
+  colStatus: 'Status',
+  colLatency: 'Latency',
+  statusIdle: 'Untested',
+  statusTesting: 'Testing',
+  statusOk: 'Available',
+  statusFail: 'Unavailable',
+  statusSkip: 'Skipped',
+  testOne: 'Test',
+  testOneTip: 'Click to test this model',
+}

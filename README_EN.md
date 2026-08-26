@@ -97,8 +97,12 @@ Project layout:
 
 ```
 dsh-model-health/
-├── src/index.ts          # host side: tool + HTTP routes
-├── src/client.tsx        # client side: settings panel (TSX browser module)
+├── src/index.ts            # host entry: tool + HTTP route wiring
+├── src/host/               # host impl: config / models / markdown / http / model-test
+├── src/client.tsx          # client entry shell: injects React, assembles exports
+├── src/client/             # client impl: types / runtime / i18n / storage / api /
+│                           #   styles / columns / use-test-results / apply
+│   └── components/         # ModelListSection / StatusCell / ErrorTooltip
 ├── cordis.patch.yml      # bundle layer declaration (id/name resolve as package names)
 └── dist/                 # build output (included in the published files field)
 ```
