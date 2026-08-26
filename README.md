@@ -23,7 +23,7 @@ dsh plugin --profile web add dsh-model-health
 git clone https://github.com/oxlyn/dsh-model-health.git
 cd dsh-model-health
 pnpm install
-pnpm run build        # tsc → dist/index.js (pure ESM) + dist/client.js
+pnpm run build        # tsdown → dist/index.js (ESM) + dist/client.js (IIFE)
 
 # 在插件的父目录执行（dsh plugin add 的相对路径锚定调用目录）：
 cd ..
@@ -70,7 +70,7 @@ dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
 │  - 解析 DSH credential service 获取 API Key                        │
 └──────────────────────────────────────────────────────────────────┘
                           │ fetch
-┌─ client 侧 src/client.js（浏览器端模块）──────────────────────────┐
+┌─ client 侧 src/client.tsx（TSX，浏览器端模块）────────────────────┐
 │  - 通过 settings.section slot 注入「模型健康」面板                  │
 │  - React（宿主提供）渲染表格 + 状态徽章 + hover 错误提示            │
 │  - 「测试全部」：worker pool 限并发 6，逐个更新行状态               │
@@ -97,7 +97,7 @@ pnpm run build       # 构建 dist/
 ```
 dsh-model-health/
 ├── src/index.ts          # host 侧：tool + HTTP 路由
-├── src/client.js         # client 侧：设置页面板（浏览器模块）
+├── src/client.tsx        # client 侧：设置页面板（TSX 浏览器模块）
 ├── cordis.patch.yml      # bundle 层声明（id/name 走包名解析）
 └── dist/                 # 构建产物（发布包含在 files 字段中）
 ```

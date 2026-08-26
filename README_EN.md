@@ -23,7 +23,7 @@ dsh plugin --profile web add dsh-model-health
 git clone https://github.com/oxlyn/dsh-model-health.git
 cd dsh-model-health
 pnpm install
-pnpm run build        # tsc → dist/index.js (pure ESM) + dist/client.js
+pnpm run build        # tsdown → dist/index.js (ESM) + dist/client.js (IIFE)
 
 # Run from the PARENT directory (dsh plugin add anchors relative paths
 # to the invoking directory):
@@ -71,7 +71,7 @@ The plugin consists of a host side and a client side (declared via the `dsh.clie
 │  - resolves API keys via the DSH credential service               │
 └──────────────────────────────────────────────────────────────────┘
                           │ fetch
-┌─ client side src/client.js (browser module) ─────────────────────┐
+┌─ client side src/client.tsx (TSX, browser module) ───────────────┐
 │  - injects the "Model Health" panel via a settings.section slot   │
 │  - React (provided by the host) renders table + badges + tooltip  │
 │  - "Test All": worker pool with concurrency limit of 6            │
@@ -98,7 +98,7 @@ Project layout:
 ```
 dsh-model-health/
 ├── src/index.ts          # host side: tool + HTTP routes
-├── src/client.js         # client side: settings panel (browser module)
+├── src/client.tsx        # client side: settings panel (TSX browser module)
 ├── cordis.patch.yml      # bundle layer declaration (id/name resolve as package names)
 └── dist/                 # build output (included in the published files field)
 ```

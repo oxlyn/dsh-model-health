@@ -20,7 +20,7 @@
 dsh-model-health/
 ├── src/
 │   ├── index.ts        # 服务端主入口（Tool + HTTP 路由）
-│   └── client.js       # 浏览器侧 React 组件（注入到设置页）
+│   └── client.tsx      # 浏览器侧 React 组件（TSX，注入到设置页）
 ├── cordis.patch.yml    # bundle 层 patch 声明（注册到 profile）
 ├── package.json        # 依赖、构建脚本、dsh 字段
 ├── tsconfig.json       # TypeScript 配置（ESM + bundler 解析）
@@ -30,7 +30,7 @@ dsh-model-health/
 
 构建产物（`dist/`）：
 - `dist/index.js` —— `tsc` 编译产物
-- `dist/client.js` —— 直接 `cp` 自 `src/client.js`（已是浏览器可直接加载的 IIFE 格式）
+- `dist/client.js` —— 由 tsdown 从 `src/client.tsx` 打包为 IIFE（JSX 编译为 React.createElement，react 运行时仍由 harness require() 提供）
 
 ## 三、核心功能
 
@@ -56,7 +56,7 @@ dsh-model-health/
 
 ## 四、客户端 UI
 
-`src/client.js` 通过 DSH 浏览器模块加载器 `window.__ModuleLoader__.load(...)` 注册，依赖 `slots` 服务，向 `settings.section` 注入一个名为"模型列表"的 section。
+`src/client.tsx` 通过 DSH 浏览器模块加载器 `window.__ModuleLoader__.load(...)` 注册，依赖 `slots` 服务，向 `settings.section` 注入一个名为"模型列表"的 section。
 
 组件 `ModelListSection` 特性：
 
@@ -74,7 +74,7 @@ dsh-model-health/
 
 ```sh
 pnpm install
-pnpm run build        # tsc -p tsconfig.json && cp src/client.js dist/client.js
+pnpm run build        # tsdown → dist/index.js + dist/client.js
 pnpm run typecheck    # 仅类型检查，不产物
 ```
 
