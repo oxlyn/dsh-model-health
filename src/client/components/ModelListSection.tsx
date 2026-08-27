@@ -88,9 +88,12 @@ export function ModelListSection({ t, locale }: ModelListSectionProps): ReactEle
     activeLang === 'en' ? 'en-US' : 'zh-CN',
   )
 
-  // 统计测试结果
+  // 统计测试结果：仅统计当前 models 列表内仍存在的 key，
+  // 避免 localStorage 中残留的旧模型记录虚增数字
+  const validKeys = new Set(models.map((m) => m.key))
   const stats = { ok: 0, fail: 0, skip: 0 }
   for (const k in run.results) {
+    if (!validKeys.has(k)) continue
     const s = run.results[k].status
     if (s === 'ok') stats.ok++
     else if (s === 'fail') stats.fail++
