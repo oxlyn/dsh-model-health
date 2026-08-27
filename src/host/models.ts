@@ -2,7 +2,7 @@
 
 /** 模型行：host 侧内部使用；apiKeyEnv 不输出到浏览器（见 toPublicRow）。 */
 export interface ModelRow {
-  /** 稳定标识 provider/modelId：测试结果与前端状态都按它关联，settings 顺序变化不错位 */
+  /** 稳定标识（来源/provider/modelId）：测试结果与前端状态都按它关联，settings 顺序变化不错位 */
   key: string
   provider: string
   displayName: string
@@ -34,8 +34,11 @@ export function collectModels(cfg: Record<string, any>): ModelRow[] {
       if (!p || typeof p !== 'object') continue
       const models = Array.isArray(p.models) ? p.models : []
       for (const m of models) {
+        if (!m || typeof m !== 'object' || !m.id) continue
         rows.push({
-          key: `${route}/${m.id || ''}`,
+          // 前缀 pi-ai/ 与 llm-deepseek 的 deepseek/ 区分，避免 route 恰好叫
+          // "deepseek" 时两类来源生成相同 key（测试结果会互相串扰）
+          key: `pi-ai/${route}/${m.id}`,
           provider: route,
           displayName: p.displayName || route,
           modelId: m.id || '',
@@ -57,8 +60,9 @@ export function collectModels(cfg: Record<string, any>): ModelRow[] {
   if (ds && typeof ds === 'object') {
     const models = Array.isArray(ds.models) ? ds.models : []
     for (const m of models) {
+      if (!m || typeof m !== 'object' || !m.id) continue
       rows.push({
-        key: `deepseek/${m.id || ''}`,
+        key: `deepseek/${m.id}`,
         provider: 'deepseek',
         displayName: 'DeepSeek',
         modelId: m.id || '',

@@ -36,11 +36,14 @@ async function probeModel(row: ModelRow, apiKey: string): Promise<{
       }),
       signal: controller.signal,
     })
-    // 收到响应即解除超时（body 读取不受 10s 定时器约束）
-    clearTimeout(timer)
     const latency = Date.now() - start
-    if (resp.ok) return { status: 'ok', latency }
+    if (resp.ok) {
+      clearTimeout(timer)
+      return { status: 'ok', latency }
+    }
+    // 错误体读取仍受 10s 超时约束：对端发完响应头后停滞不会永久挂起
     const text = await resp.text().catch(() => '')
+    clearTimeout(timer)
     return { status: 'fail', latency, error: `HTTP ${resp.status}: ${text.slice(0, 300)}` }
   } catch (e: any) {
     clearTimeout(timer)
