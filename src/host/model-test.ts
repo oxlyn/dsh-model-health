@@ -7,8 +7,31 @@ import { readSettingsCached } from './config'
 import { collectModels, type ModelRow } from './models'
 import { readJsonBody, sendJson } from './http'
 
-/** 通过 DSH credential service 解析 API Key；失败/未配置返回 undefined。 */
+/** 解析 API Key；失败/未配置返回 undefined。 */
 export type ResolveApiKey = (ref: string) => Promise<string | undefined>
+
+/** 错误体最多读这么多字节就提前取消（展示时也只取前 300 字符） */
+const MAX_ERROR_BODY_BYTES = 1024
+
+/** 读取错误响应体的前几百字符：超大响应（如 HTML 错误页）不整体载入内存。 */
+async function readErrorSnippet(resp: Response): Promise<string> {
+  const len = Number(resp.headers.get('content-length') || 0)
+  if (len > MAX_ERROR_BODY_BYTES) return `（响应体 ${len} 字节，已省略）`
+  const reader = resp.body?.getReader()
+  if (!reader) return ''
+  const decoder = new TextDecoder()
+  let text = ''
+  try {
+    while (text.length < 300) {
+      const { done, value } = await reader.read()
+      if (done) break
+      text += decoder.decode(value, { stream: true })
+    }
+  } finally {
+    await reader.cancel().catch(() => {})
+  }
+  return text.slice(0, 300)
+}
 
 /** 发起最小测试请求（max_tokens=1，超时 10s），返回结果对象。 */
 async function probeModel(row: ModelRow, apiKey: string): Promise<{
@@ -42,7 +65,7 @@ async function probeModel(row: ModelRow, apiKey: string): Promise<{
       return { status: 'ok', latency }
     }
     // 错误体读取仍受 10s 超时约束：对端发完响应头后停滞不会永久挂起
-    const text = await resp.text().catch(() => '')
+    const text = await readErrorSnippet(resp).catch(() => '')
     clearTimeout(timer)
     return { status: 'fail', latency, error: `HTTP ${resp.status}: ${text.slice(0, 300)}` }
   } catch (e: any) {

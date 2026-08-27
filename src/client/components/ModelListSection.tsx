@@ -54,6 +54,13 @@ export function ModelListSection({ t, locale }: ModelListSectionProps): ReactEle
     void loadData()
   }, [loadData])
 
+  // 数据加载后修剪 localStorage 中已不存在的模型的历史结果，防止无限累积
+  useEffect(() => {
+    if (state.data?.ok && state.data.models) {
+      run.prune(new Set(state.data.models.map((m) => m.key)))
+    }
+  }, [state.data, run.prune])
+
   const toggleCol = (key: string): void => {
     setOptionalCols((s) => ({ ...s, [key]: !s[key] }))
   }
@@ -88,13 +95,10 @@ export function ModelListSection({ t, locale }: ModelListSectionProps): ReactEle
     activeLang === 'en' ? 'en-US' : 'zh-CN',
   )
 
-  // 统计测试结果：仅统计当前 models 列表内仍存在的 key，
-  // 避免 localStorage 中残留的旧模型记录虚增数字
-  const validKeys = new Set(models.map((m) => m.key))
+  // 统计测试结果（localStorage 已在数据加载后按有效 key 修剪，直接遍历当前模型）
   const stats = { ok: 0, fail: 0, skip: 0 }
-  for (const k in run.results) {
-    if (!validKeys.has(k)) continue
-    const s = run.results[k].status
+  for (const m of models) {
+    const s = run.results[m.key]?.status
     if (s === 'ok') stats.ok++
     else if (s === 'fail') stats.fail++
     else if (s === 'skip') stats.skip++
@@ -187,7 +191,7 @@ export function ModelListSection({ t, locale }: ModelListSectionProps): ReactEle
               {models.map((row, i) => {
                 const tr = run.results[row.key] || { status: 'idle' as const }
                 return (
-                  <tr key={(row.modelId || '') + i}>
+                  <tr key={row.key}>
                     {visibleCols.map((col) => {
                       if (col.key === 'provider') {
                         const span = providerSpan[i]

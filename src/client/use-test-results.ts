@@ -19,6 +19,8 @@ export interface TestRunState {
   testOne: (key: string) => Promise<void>
   /** 测试全部：并发（限 CONCURRENCY）逐个更新 */
   testAll: (models: ModelRow[]) => Promise<void>
+  /** 按当前存在的模型 key 修剪结果（含 localStorage），防止已删除模型的历史记录无限累积 */
+  prune: (validKeys: Set<string>) => void
 }
 
 export function useTestResults(): TestRunState {
@@ -74,5 +76,19 @@ export function useTestResults(): TestRunState {
     )
   }, [testOne])
 
-  return { results, testing, progress, testOne, testAll }
+  const prune = useCallback((validKeys: Set<string>) => {
+    setResults((s) => {
+      const next: Record<string, TestResult> = {}
+      let changed = false
+      for (const k in s) {
+        if (validKeys.has(k)) next[k] = s[k]
+        else changed = true
+      }
+      if (!changed) return s
+      saveStoredResults(next)
+      return next
+    })
+  }, [])
+
+  return { results, testing, progress, testOne, testAll, prune }
 }
