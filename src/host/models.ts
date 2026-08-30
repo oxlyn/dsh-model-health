@@ -23,8 +23,9 @@ export function toPublicRow(r: ModelRow): Omit<ModelRow, 'apiKeyEnv'> {
   return public_
 }
 
-export function collectModels(cfg: Record<string, any>): ModelRow[] {
+export function collectModels(cfg: Record<string, any> | null | undefined): ModelRow[] {
   const rows: ModelRow[] = []
+  if (!cfg || typeof cfg !== 'object') return rows
 
   // 1. 通用多协议提供商 llm-pi-ai
   const piAi = cfg['llm-pi-ai']

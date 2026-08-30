@@ -53,11 +53,11 @@ dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
 **特性一览：**
 
 - 支持 `llm-pi-ai`（多协议自定义提供商）与 `llm-deepseek`（官方）两类配置来源
-- 可用性测试支持 `openai-completions` 与 `deepseek` 协议，其余协议自动标记「跳过」
+- 可用性测试支持 `openai-completions` 与 `deepseek` 协议，其余协议自动标记「跳过」；对 200 响应校验 body 确实是成功应答（部分网关 200 但 body 是错误对象）
 - API Key 通过 DSH credential service（`ctx.credentials.resolve`）解析，密钥不会输出到浏览器
 - 测试结果（状态/延迟/错误）持久化到 localStorage，刷新页面后仍可见
 - 状态列的 可用 / 不可用 / 跳过 徽章随时可点击，对单个模型重新测试，原地刷新状态与延迟
-- 设置导航使用脉搏线（Activity）图标——宿主图标表没有「健康」类目，参考 dsh-better-sidebar 的方案，JS 精准打 marker，CSS 用 `::before` + `mask` 把齿轮 svg 原地替换；颜色随主题走
+- 设置导航使用脉搏线（Activity）图标——宿主图标表没有「健康」类目，参考 dsh-better-sidebar 的方案，JS 精准打 marker（rAF 合帧防抖），CSS 用 `::before` + `mask` 把齿轮 svg 原地替换；颜色随主题走
 
 ## 实现方式 / How it works
 
@@ -69,6 +69,7 @@ dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
 │  - ctx.webServer.register：                                        │
 │      GET  /api/model-health/json  读取并解析 settings.yaml → JSON  │
 │      POST /api/model-health/test  对单模型发最小请求测可用性/延迟  │
+│      （Origin 限本机；200 响应校验 body 为成功应答）               │
 │  - 解析 DSH credential service 获取 API Key                        │
 └──────────────────────────────────────────────────────────────────┘
                           │ fetch

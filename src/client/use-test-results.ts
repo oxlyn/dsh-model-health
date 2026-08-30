@@ -45,9 +45,13 @@ export function useTestResults(): TestRunState {
   }, [])
 
   const testOne = useCallback(async (key: string): Promise<void> => {
+    // 在途守卫：该模型已在测试中（测试全部进行到它了）则不重复发起
+    setResults((s) => {
+      if (s[key]?.status === 'testing') return s
+      return { ...s, [key]: { status: 'testing' as const } }
+    })
     const seq = (seqRef.current[key] || 0) + 1
     seqRef.current[key] = seq
-    setResults((s) => ({ ...s, [key]: { status: 'testing' as const } }))
     const result = await requestModelTest(key)
     writeResult(key, seq, result)
   }, [writeResult])
@@ -61,7 +65,7 @@ export function useTestResults(): TestRunState {
     let done = 0
     const queue = models.map((m) => m.key)
 
-    async function worker(): Promise<void> {
+    const worker = async (): Promise<void> => {
       while (queue.length > 0) {
         const key = queue.shift()
         if (key === undefined) break

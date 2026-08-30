@@ -6,7 +6,7 @@
 //   config.ts      settings.yaml 读取/解析（mtime 缓存）
 //   models.ts      模型收集（llm-pi-ai / llm-deepseek）
 //   markdown.ts    list_models 的 Markdown 表格渲染
-//   http.ts        JSON 响应 / 请求体读取工具
+//   http.ts        JSON 响应 / 请求体读取 / 本地来源校验
 //   model-test.ts  POST /api/model-health/test 的 handler 工厂
 //   services.d.ts  webServer / credentials 服务类型补充
 //

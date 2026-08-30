@@ -9,6 +9,23 @@ export function sendJson(res: ServerResponse, code: number, obj: unknown): void 
   res.end(JSON.stringify(obj))
 }
 
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]', '::1', '0.0.0.0'])
+
+/**
+ * 浏览器跨站请求会携带 Origin 头：要求其指向本机（无 Origin 的请求——
+ * curl / 服务间调用——放行）。与 readJsonBody 的 Content-Type 门卫叠加，
+ * 构成写路由（POST /test）的双层 CSRF/SSRF 缓解。
+ */
+export function isLocalOrigin(req: IncomingMessage): boolean {
+  const origin = String(req.headers.origin ?? '')
+  if (!origin) return true
+  try {
+    return LOCAL_HOSTNAMES.has(new URL(origin).hostname.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
 /** 读 JSON body（限 64KB），且必须是 application/json（兼作 CSRF 门卫）。 */
 export async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   const ct = String(req.headers['content-type'] ?? '')

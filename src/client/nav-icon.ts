@@ -20,8 +20,11 @@ export const SETTINGS_NAV_MARKER = 'data-dsh-model-health-settings-nav'
  */
 export function registerSettingsNavIcon(label: () => string): () => void {
   let disposed = false
+  // rAF 合帧：MutationObserver 会高频触发（尤其 characterData），把全量
+  // querySelectorAll 合并到每帧最多一次，避免拖慢设置弹窗的渲染
+  let scheduled = false
 
-  const sync = (): void => {
+  const run = (): void => {
     if (disposed) return
     const currentLabel = label().trim()
     const buttons = document.querySelectorAll<HTMLButtonElement>('[role="dialog"] nav button')
@@ -33,7 +36,16 @@ export function registerSettingsNavIcon(label: () => string): () => void {
     }
   }
 
-  sync()
+  const sync = (): void => {
+    if (scheduled || disposed) return
+    scheduled = true
+    requestAnimationFrame(() => {
+      scheduled = false
+      run()
+    })
+  }
+
+  run()
   // childList+subtree 覆盖弹窗挂载/卸载；characterData 覆盖 i18n 切换只改文本
   // 节点的情形——漏掉这一项就是「英文/中文切换后齿轮又回来」的根因
   const observer = new MutationObserver(sync)

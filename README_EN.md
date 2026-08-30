@@ -54,11 +54,11 @@ Reads `$DSH_HOME/settings.yaml` (default `~/.dsh/settings.yaml`) and provides th
 **Highlights:**
 
 - Supports both `llm-pi-ai` (multi-protocol custom providers) and `llm-deepseek` (official) configuration sources
-- Availability testing supports `openai-completions` and `deepseek` protocols; other protocols are automatically marked "Skip"
+- Availability testing supports `openai-completions` and `deepseek` protocols; other protocols are automatically marked "Skip". 200 responses are body-validated (some gateways return 200 with an error payload)
 - API keys are resolved via the DSH credential service (`ctx.credentials.resolve`) and never exposed to the browser
 - Test results (status / latency / error) persist to localStorage across page refreshes
 - Status badges (Available / Unavailable / Skipped) are clickable at any time to re-test an individual model; status and latency refresh in place
-- Settings nav uses a pulse (Activity) glyph — the host's icon table has no "health" category, so the plugin (following dsh-better-sidebar's pattern) marks its own row and the injected CSS swaps the fallback gear via a `::before` + `mask` rule; color follows the host theme
+- Settings nav uses a pulse (Activity) glyph — the host's icon table has no "health" category, so the plugin (following dsh-better-sidebar's pattern) marks its own row (rAF-coalesced observer) and the injected CSS swaps the fallback gear via a `::before` + `mask` rule; color follows the host theme
 
 ## How it works
 
@@ -70,6 +70,7 @@ The plugin consists of a host side and a client side (declared via the `dsh.clie
 │  - ctx.webServer.register:                                        │
 │      GET  /api/model-health/json  reads & parses settings.yaml    │
 │      POST /api/model-health/test  minimal request per model       │
+│      (local Origin only; 200 responses body-validated)            │
 │  - resolves API keys via the DSH credential service               │
 └──────────────────────────────────────────────────────────────────┘
                           │ fetch

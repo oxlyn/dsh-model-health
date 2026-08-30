@@ -19,7 +19,7 @@ export interface ModelListSectionProps {
 
 export function ModelListSection({ t, locale }: ModelListSectionProps): ReactElement {
   const React = getReact()
-  const { useState, useEffect, useCallback } = React
+  const { useState, useEffect, useCallback, useRef } = React
   const run = useTestResults()
 
   const [state, setState] = useState<{
@@ -32,6 +32,9 @@ export function ModelListSection({ t, locale }: ModelListSectionProps): ReactEle
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
   // 语言切换时强制重渲染（t 每次调用读取当前激活词典）
   const [localeTick, setLocaleTick] = useState(0)
+  // t 的引用可能随语言切换变化：用 ref 持有，避免 loadData 随之重建触发重新拉取
+  const tRef = useRef(t)
+  tRef.current = t
 
   useEffect(() => {
     if (!locale || typeof locale.subscribe !== 'function') return
@@ -42,13 +45,13 @@ export function ModelListSection({ t, locale }: ModelListSectionProps): ReactEle
     setState((s) => ({ ...s, loading: true, error: null }))
     try {
       const json = await fetchModelList()
-      if (!json.ok) throw new Error(json.error || t('unknownError'))
+      if (!json.ok) throw new Error(json.error || tRef.current('unknownError'))
       setState({ loading: false, error: null, data: json })
       // 不清空 testResults，保留上次测试结果
     } catch (e) {
       setState({ loading: false, error: (e as Error).message, data: null })
     }
-  }, [t])
+  }, [])
 
   useEffect(() => {
     void loadData()
@@ -60,6 +63,18 @@ export function ModelListSection({ t, locale }: ModelListSectionProps): ReactEle
       run.prune(new Set(state.data.models.map((m) => m.key)))
     }
   }, [state.data, run.prune])
+
+  // tooltip 显示期间监听滚动/窗口变化：fixed 定位不跟随滚动，直接关闭最稳妥
+  useEffect(() => {
+    if (!tooltip) return
+    const close = () => setTooltip(null)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [tooltip])
 
   const toggleCol = (key: string): void => {
     setOptionalCols((s) => ({ ...s, [key]: !s[key] }))
