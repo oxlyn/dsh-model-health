@@ -1,6 +1,6 @@
 {
   "name": "dsh-model-health",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "description": "DSH plugin that lists all configured models with availability/latency testing, by reading $DSH_HOME/settings.yaml.",
   "license": "MIT",
   "repository": {
@@ -41,11 +41,11 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": "0.1.0-rc.8"
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.8"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-tools": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.8",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.18",
