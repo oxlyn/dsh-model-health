@@ -6,16 +6,16 @@ import { join } from 'node:path'
 import type { ModelRow } from './models'
 import { dshHome } from './config'
 
-export function renderMarkdownTable(rows: ModelRow[]): string {
-  const settingsPath = join(dshHome(), 'settings.yaml')
+export function renderMarkdownTable(rows: ModelRow[], source?: string): string {
+  const configLabel = source || join(dshHome(), 'settings.yaml')
 
   if (rows.length === 0) {
     return [
-      '当前 settings.yaml 中未配置任何模型。/ No models are configured in settings.yaml.',
+      '当前 DSH 配置中未配置任何模型。/ No models are configured in the DSH config.',
       '',
       '请在 Web UI 的 设置 → 模型 中添加 DeepSeek API Key 或自定义提供商。',
       'Please add a DeepSeek API key or a custom provider in Web UI → Settings → Models.',
-      `配置文件位置 / Config file: ${settingsPath}`,
+      `配置文件位置 / Config file(s): ${configLabel}`,
     ].join('\n')
   }
 
@@ -32,6 +32,6 @@ export function renderMarkdownTable(rows: ModelRow[]): string {
     sep,
     ...lines,
     '',
-    `_来源 / Source: ${settingsPath}_`,
+    `_来源 / Source: ${configLabel}_`,
   ].join('\n')
 }

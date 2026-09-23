@@ -16,8 +16,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import { join } from 'node:path'
-import { readSettingsCached, dshHome } from './host/config'
+import { readSettingsCached, settingsPaths } from './host/config'
 import { collectModels, toPublicRow } from './host/models'
 import { renderMarkdownTable } from './host/markdown'
 import { sendJson } from './host/http'
@@ -29,14 +28,21 @@ export const name = 'dsh-model-health'
 // - tools：Tool 插件
 // - webServer：HTTP 路由
 // - credentials：通过 apiKeyEnv 名解析实际 API Key（DSH 的 credential seam）
+// profileContext 仅新版 DSH 提供（用于定位 profile patch），不声明在 inject 里，
+// 通过 ctx.get('profileContext') 可选读取，保证老版本宿主也能启动。
 export const inject = ['tools', 'webServer', 'credentials']
 
 export function apply(ctx: Context) {
+  // 新版 DSH 注入的 profile 上下文（老版本不存在，走旧版 settings.yaml 读取）
+  const profile = ctx.get('profileContext') as
+    | { dir: string; patchPath: string }
+    | undefined
+
   // ── 1. Tool 插件（对话中调用，返回 Markdown 表格）──────────────────
   ctx.tools.register(defineTool({
     name: 'list_models',
     description:
-      '列出当前 DSH 配置（$DSH_HOME/settings.yaml）中已配置的所有模型，' +
+      '列出当前 DSH 配置（settings.yaml 或 profile patch）中已配置的所有模型，' +
       '以 Markdown 表格展示。用于在对话中查看当前可用模型清单。',
     parameters: {},
     output: {
@@ -44,7 +50,8 @@ export function apply(ctx: Context) {
       render: (_args, value) => [{ type: 'text', text: value }],
     },
     async execute() {
-      return renderMarkdownTable(collectModels(readSettingsCached()))
+      const source = settingsPaths(profile).join(' + ')
+      return renderMarkdownTable(collectModels(readSettingsCached(profile)), source)
     },
   }))
 
@@ -54,11 +61,11 @@ export function apply(ctx: Context) {
     path: '/api/model-health/json',
     handler: (_req, res) => {
       try {
-        const rows = collectModels(readSettingsCached())
+        const rows = collectModels(readSettingsCached(profile))
         sendJson(res, 200, {
           ok: true,
           count: rows.length,
-          source: join(dshHome(), 'settings.yaml'),
+          source: settingsPaths(profile).join(' + '),
           updatedAt: new Date().toISOString(),
           models: rows.map(toPublicRow),
         })

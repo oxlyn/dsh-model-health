@@ -43,7 +43,7 @@ dsh --profile web --dump-config | grep dsh-model-health
 
 ## Features
 
-Reads `$DSH_HOME/settings.yaml` (default `~/.dsh/settings.yaml`) and provides three ways to inspect your models:
+Reads DSH settings from multiple sources for version compatibility — legacy `$DSH_HOME/settings.yaml`, and (since DSH `0.1.7-alpha.2+`) the profile's `cordis.patch.yml` (merged by priority along with `settings.yaml.imported`) — and provides three ways to inspect your models:
 
 | # | Form | Entry | Description |
 |---|------|-------|-------------|
@@ -68,7 +68,8 @@ The plugin consists of a host side and a client side (declared via the `dsh.clie
 ┌─ host side   src/index.ts → dist/index.js ──────────────────────┐
 │  - ctx.tools.register: registers the list_models tool (Markdown) │
 │  - ctx.webServer.register:                                        │
-│      GET  /api/model-health/json  reads & parses settings.yaml    │
+│      GET  /api/model-health/json  reads & parses DSH settings     │
+│      (merges settings.yaml + profile patch, old/new versions)     │
 │      POST /api/model-health/test  minimal request per model       │
 │      (local Origin only; 200 responses body-validated)            │
 │  - resolves API keys via the DSH credential service               │

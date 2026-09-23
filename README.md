@@ -42,7 +42,7 @@ dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
 
 ## 功能 / Features
 
-读取 `$DSH_HOME/settings.yaml`（默认 `~/.dsh/settings.yaml`），提供三种使用方式：
+读取 DSH 设置配置（兼容新旧版本：旧版 `$DSH_HOME/settings.yaml`；新版 `0.1.7-alpha.2+` 迁移至 profile 的 `cordis.patch.yml`，插件自动按优先级合并 `settings.yaml` / `settings.yaml.imported` / profile patch），提供三种使用方式：
 
 | # | 形式 | 入口 | 说明 |
 |---|------|------|------|
@@ -67,7 +67,8 @@ dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
 ┌─ host 侧  src/index.ts → dist/index.js ─────────────────────────┐
 │  - ctx.tools.register：注册 list_models 工具（Markdown 表格输出） │
 │  - ctx.webServer.register：                                        │
-│      GET  /api/model-health/json  读取并解析 settings.yaml → JSON  │
+│      GET  /api/model-health/json  读取并解析 DSH 设置（settings.yaml  │
+│      与 profile patch 多来源合并，兼容新旧 DSH 版本）→ JSON          │
 │      POST /api/model-health/test  对单模型发最小请求测可用性/延迟  │
 │      （Origin 限本机；200 响应校验 body 为成功应答）               │
 │  - 解析 DSH credential service 获取 API Key                        │
