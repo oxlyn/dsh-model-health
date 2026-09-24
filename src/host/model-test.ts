@@ -1,9 +1,13 @@
 // 单模型可用性测试：POST /api/model-health/test 的路由 handler 工厂。
 // 测试语义：按 key 定位模型 → 发起一次最小 chat completions 请求（max_tokens=1，
 // 超时 10s）→ 校验响应体确实是成功应答 → 返回 { ok, key, status, latency, error? }。
+//
+// 定位模型时必须与 /api/model-health/json 列表使用同一份配置来源（都带 profile）：
+// 0.1.7-alpha.2 起新模型只写 profile patch，若此处漏传 profile 而只读
+// settings.yaml(.imported)，列表可见的模型在测试时必然「未找到」（历史 404 根因）。
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { readSettingsCached } from './config'
+import { readSettingsCached, type SettingsProfile } from './config'
 import { collectModels, type ModelRow } from './models'
 import { readJsonBody, sendJson, isLocalOrigin } from './http'
 
@@ -98,7 +102,7 @@ async function probeModel(row: ModelRow, apiKey: string): Promise<{
   }
 }
 
-export function createTestRouteHandler(resolveApiKey: ResolveApiKey) {
+export function createTestRouteHandler(resolveApiKey: ResolveApiKey, profile?: SettingsProfile) {
   return async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // 0. 本地性校验：测试接口会以宿主身份对外发请求，拒绝局域网内其他页面借
     //    CSRF 调用（浏览器跨站请求带 Origin 头；非浏览器/同源请求无此头，放行）
@@ -117,10 +121,10 @@ export function createTestRouteHandler(resolveApiKey: ResolveApiKey) {
       return
     }
 
-    // 2. 按 key 定位模型配置（settings 增删/排序后不错位）
+    // 2. 按 key 定位模型配置（settings 增删/排序后不错位；与列表端点同源）
     let row: ModelRow
     try {
-      const rows = collectModels(readSettingsCached())
+      const rows = collectModels(readSettingsCached(profile))
       const found = rows.find((r) => r.key === key)
       if (!found) {
         sendJson(res, 404, { ok: false, error: `未找到 key 为 ${key} 的模型（配置可能已变化，请刷新列表）` })

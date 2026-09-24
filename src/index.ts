@@ -77,18 +77,23 @@ export function apply(ctx: Context) {
 
   // ── 3. HTTP 路由（测试单个模型可用性）──────────────────────────────
   //    POST /api/model-health/test  body: { "key": "<provider>/<modelId>" }
+  //    传入 profile，保证与列表端点读同一份配置（新模型写在 profile patch，
+  //    漏传会导致列表可见但测试报「未找到」）。
   ctx.webServer.register({
     kind: 'exact',
     path: '/api/model-health/test',
-    handler: createTestRouteHandler(async (ref) => {
-      try {
-        // credentials.resolve 从 DSH 的 secret store 读取；
-        // resolve 可能抛错（如 ref 未配置），按未设置处理
-        return (await ctx.credentials.resolve(ref))?.value
-      } catch {
-        return undefined
-      }
-    }),
+    handler: createTestRouteHandler(
+      async (ref) => {
+        try {
+          // credentials.resolve 从 DSH 的 secret store 读取；
+          // resolve 可能抛错（如 ref 未配置），按未设置处理
+          return (await ctx.credentials.resolve(ref))?.value
+        } catch {
+          return undefined
+        }
+      },
+      profile,
+    ),
   })
 
   console.log(

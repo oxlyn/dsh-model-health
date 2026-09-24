@@ -3,11 +3,12 @@
 // - 多来源合并优先级（profile patch 覆盖旧文件、缺失 section 由旧文件补齐）
 // - 来源缺失 / 解析失败时的行为
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parseSettingsContent, readSettingsFrom } from '../src/host/config'
+import { parseSettingsContent, readSettingsCached, readSettingsFrom } from '../src/host/config'
+import { collectModels } from '../src/host/models'
 
 describe('parseSettingsContent', () => {
   it('旧版 settings.yaml（顶层 map）：提取模型 section，忽略其他 section', () => {
@@ -125,5 +126,60 @@ describe('readSettingsFrom（多来源合并）', () => {
   it('全部来源都解析失败时抛错', () => {
     const bad = write('settings.yaml', 'llm-pi-ai: [unclosed')
     expect(() => readSettingsFrom([bad])).toThrow(/解析配置失败/)
+  })
+})
+
+// 回归：测试端点此前漏传 profile，只读 settings.yaml(.imported)，导致
+// 迁移后只存在于 profile patch 的新模型「列表可见、测试 404」（历史线上问题）。
+describe('readSettingsCached（profile 决定配置可见性）', () => {
+  let dir: string
+  let profileDir: string
+  let oldHome: string | undefined
+  let profile: { dir: string; patchPath: string }
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dsh-model-health-'))
+    profileDir = join(dir, 'profiles', 'web')
+    mkdirSync(profileDir, { recursive: true })
+    profile = { dir: profileDir, patchPath: join(profileDir, 'cordis.patch.yml') }
+    oldHome = process.env.DSH_HOME
+    process.env.DSH_HOME = dir
+    // 迁移后形态：settings.yaml 已被改名，只剩 .imported（无 pm2）
+    writeFileSync(join(dir, 'settings.yaml.imported'), [
+      'llm-pi-ai:',
+      '  providers:',
+      '    sensenova:',
+      '      apiKeyEnv: SENSENOVA_API_KEY',
+      '      api: openai-completions',
+      '      models:',
+      '        - id: sensenova-6.8-flash-lite',
+    ].join('\n'))
+    // 新模型只落在 profile patch
+    writeFileSync(join(profileDir, 'cordis.patch.yml'), [
+      '- id: llm-pi-ai',
+      '  config:',
+      '    providers:',
+      '      pm2:',
+      '        apiKeyEnv: PM2_API_KEY',
+      '        api: openai-completions',
+      '        models:',
+      '          - id: mimo/mimo-v2.5',
+    ].join('\n'))
+  })
+
+  afterEach(() => {
+    if (oldHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = oldHome
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('不带 profile 时看不到 profile patch 里的新模型（复现旧 404 根因）', () => {
+    const keys = collectModels(readSettingsCached()).map((r) => r.key)
+    expect(keys).toEqual(['pi-ai/sensenova/sensenova-6.8-flash-lite'])
+  })
+
+  it('带 profile 时能看到 patch 里的新模型，key 与前端下发一致', () => {
+    const keys = collectModels(readSettingsCached(profile)).map((r) => r.key)
+    expect(keys).toContain('pi-ai/pm2/mimo/mimo-v2.5')
   })
 })
