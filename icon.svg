@@ -5,5 +5,7 @@
       <stop offset="1" stop-color="#324DE2"/>
     </linearGradient>
   </defs>
-  <polyline points="33 18 27 18 22.5 31.5 13.5 4.5 9 18 3 18" stroke="url(#pulse)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(18 18) scale(0.86) translate(-18 -18)">
+    <polyline points="33 18 27 18 22.5 31.5 13.5 4.5 9 18 3 18" stroke="url(#pulse)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
 </svg>
