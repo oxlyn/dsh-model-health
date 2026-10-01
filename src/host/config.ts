@@ -6,12 +6,16 @@
 // settings.yaml.imported，并逐 section 写回当前 profile 的 cordis.patch.yml
 // （形如 `- id: <entry> / config: {...}` 的 YAML 序列）。
 //
-// 因此这里按优先级读取多个候选来源，后出现的来源覆盖前面的同名 section：
-//   1. $DSH_HOME/settings.yaml           （老版本 / 新版本迁移前）
-//   2. $DSH_HOME/settings.yaml.imported  （新版本迁移后遗留的旧文件）
-//   3. $DSH_HOME/cordis.patch.yml        （新版本 home 级用户补丁层）
-//   4. <profile.dir>/cordis.yml          （新版本 profile 根配置，通常为空）
-//   5. <profile.dir>/cordis.patch.yml    （新版本 profile 补丁，迁移落点）
+// 因此按「是否有 profileContext」二分：
+// - 新版 DSH（有 profileContext）：只读当前 profile 自己的配置层——
+//     1. <profile.dir>/cordis.yml          （profile 根配置，通常为空）
+//     2. <profile.dir>/cordis.patch.yml    （profile 补丁，模型配置的实际落点）
+//   home 级的 settings.yaml / settings.yaml.imported / cordis.patch.yml 是
+//   迁移遗留或跨 profile 共享的全局文件，不属于当前 profile 的生效配置：
+//   它们会把其它 profile 的模型泄漏进来（实测：桌面 profile 未配置三方模型，
+//   面板却显示 web 迁移前的旧模型）。故不再作为配置层。
+// - 旧版 DSH（无 profileContext）：全局 settings.yaml(.imported) 即全部配置，
+//   不存在 profile 概念，无泄漏问题。
 
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -85,20 +89,19 @@ export function parseSettingsContent(raw: string): Record<string, any> {
 
 /** 返回当前存在的候选设置文件路径（按优先级排列）。 */
 export function settingsPaths(profile?: SettingsProfile): string[] {
+  // 新版 DSH：只认当前 profile 自己的配置层（详见文件头注释）
+  if (profile) {
+    return [
+      join(profile.dir, 'cordis.yml'),
+      profile.patchPath,
+    ].filter((p) => existsSync(p))
+  }
+  // 旧版 DSH：全局 settings.yaml(.imported) 即全部配置
   const home = dshHome()
   const out: string[] = []
   for (const name of ['settings.yaml', 'settings.yaml.imported']) {
     const p = join(home, name)
     if (existsSync(p)) out.push(p)
-  }
-  if (profile) {
-    for (const p of [
-      join(home, 'cordis.patch.yml'),
-      join(profile.dir, 'cordis.yml'),
-      profile.patchPath,
-    ]) {
-      if (existsSync(p)) out.push(p)
-    }
   }
   return out
 }
@@ -142,8 +145,12 @@ export function readSettingsFrom(paths: string[]): Record<string, any> {
 
 /**
  * 读取当前生效的 DSH 模型配置。
- * @param profile 新版 DSH 的 profileContext（可空，空时按旧版逻辑只读 settings.yaml）
+ * @param profile 新版 DSH 的 profileContext（可空，空时按旧版逻辑只读 settings.yaml）。
+ *   新版下 profile 目录连候选文件都没有时返回空配置（该 profile 确实没配置模型），
+ *   而不是抛「未找到配置文件」——空是合法状态，面板应显示空态。
  */
 export function readSettingsCached(profile?: SettingsProfile): Record<string, any> {
-  return readSettingsFrom(settingsPaths(profile))
+  const paths = settingsPaths(profile)
+  if (profile && paths.length === 0) return {}
+  return readSettingsFrom(paths)
 }

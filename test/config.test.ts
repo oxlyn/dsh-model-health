@@ -178,8 +178,17 @@ describe('readSettingsCached（profile 决定配置可见性）', () => {
     expect(keys).toEqual(['pi-ai/sensenova/sensenova-6.8-flash-lite'])
   })
 
-  it('带 profile 时能看到 patch 里的新模型，key 与前端下发一致', () => {
+  it('带 profile 时只读 profile 自己的配置：patch 新模型可见，全局迁移残留不泄漏', () => {
     const keys = collectModels(readSettingsCached(profile)).map((r) => r.key)
     expect(keys).toContain('pi-ai/pm2/mimo/mimo-v2.5')
+    // settings.yaml.imported 是全局迁移残留，不属于当前 profile 的生效配置：
+    // 桌面 profile 未配置三方模型，不应显示 web 迁移前的旧模型（实测泄漏 bug）
+    expect(keys).not.toContain('pi-ai/sensenova/sensenova-6.8-flash-lite')
+  })
+
+  it('profile 目录连配置文件都没有时返回空配置（不抛错）', () => {
+    const emptyProfile = { dir: join(dir, 'profiles', 'bare'), patchPath: join(dir, 'profiles', 'bare', 'cordis.patch.yml') }
+    mkdirSync(emptyProfile.dir, { recursive: true })
+    expect(readSettingsCached(emptyProfile)).toEqual({})
   })
 })
