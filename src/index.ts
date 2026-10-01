@@ -17,10 +17,11 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { readSettingsCached, settingsPaths } from './host/config'
-import { collectModels, toPublicRow } from './host/models'
+import { collectModels, toPublicRow, type ModelRow } from './host/models'
 import { renderMarkdownTable } from './host/markdown'
 import { sendJson } from './host/http'
 import { createTestRouteHandler } from './host/model-test'
+import { collectRegistryModels, dedupeRegistryRows, type LlmRuntimeLike } from './host/registry'
 
 export const name = 'dsh-model-health'
 
@@ -37,6 +38,20 @@ export function apply(ctx: Context) {
   const profile = ctx.get('profileContext') as
     | { dir: string; patchPath: string }
     | undefined
+  // 宿主 llm 注册表（老版本不存在；用于显示内置模型，如 DeepSeek 默认目录）
+  const llm = ctx.get('llm') as LlmRuntimeLike | undefined
+
+  /** 配置文件模型 + 注册表补充模型（内置等文件里没有的条目）。 */
+  const collectAllRows = async (): Promise<ModelRow[]> => {
+    const fileRows = collectModels(readSettingsCached(profile))
+    if (!llm) return fileRows
+    try {
+      const extra = dedupeRegistryRows(await collectRegistryModels(llm), fileRows)
+      return [...fileRows, ...extra]
+    } catch {
+      return fileRows // 注册表不可用时退回纯文件配置
+    }
+  }
 
   // ── 1. Tool 插件（对话中调用，返回 Markdown 表格）──────────────────
   ctx.tools.register(defineTool({
@@ -51,7 +66,7 @@ export function apply(ctx: Context) {
     },
     async execute() {
       const source = settingsPaths(profile).join(' + ')
-      return renderMarkdownTable(collectModels(readSettingsCached(profile)), source)
+      return renderMarkdownTable(await collectAllRows(), source)
     },
   }))
 
@@ -59,9 +74,9 @@ export function apply(ctx: Context) {
   ctx.webServer.register({
     kind: 'exact',
     path: '/api/model-health/json',
-    handler: (_req, res) => {
+    handler: async (_req, res) => {
       try {
-        const rows = collectModels(readSettingsCached(profile))
+        const rows = await collectAllRows()
         sendJson(res, 200, {
           ok: true,
           count: rows.length,
@@ -93,6 +108,13 @@ export function apply(ctx: Context) {
         }
       },
       profile,
+      // key 不在配置文件时查注册表：内置模型返回「跳过」而不是「未找到」
+      llm
+        ? async (key) => {
+            const registryRows = await collectRegistryModels(llm)
+            return registryRows.find((r) => r.key === key)
+          }
+        : undefined,
     ),
   })
 

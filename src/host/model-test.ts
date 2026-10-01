@@ -102,7 +102,12 @@ async function probeModel(row: ModelRow, apiKey: string): Promise<{
   }
 }
 
-export function createTestRouteHandler(resolveApiKey: ResolveApiKey, profile?: SettingsProfile) {
+export function createTestRouteHandler(
+  resolveApiKey: ResolveApiKey,
+  profile?: SettingsProfile,
+  /** 可选兜底：key 不在配置文件里时查宿主 llm 注册表（内置模型 → 返回 skip） */
+  findExtraRow?: (key: string) => Promise<ModelRow | undefined>,
+) {
   return async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // 0. 本地性校验：测试接口会以宿主身份对外发请求，拒绝局域网内其他页面借
     //    CSRF 调用（浏览器跨站请求带 Origin 头；非浏览器/同源请求无此头，放行）
@@ -127,6 +132,15 @@ export function createTestRouteHandler(resolveApiKey: ResolveApiKey, profile?: S
       const rows = collectModels(readSettingsCached(profile))
       const found = rows.find((r) => r.key === key)
       if (!found) {
+        // 配置文件里没有：可能是宿主注册表里的内置模型（无 baseURL/key 可探测）
+        const extra = findExtraRow ? await findExtraRow(key).catch(() => undefined) : undefined
+        if (extra) {
+          sendJson(res, 200, {
+            ok: true, key, status: 'skip',
+            error: '宿主内置模型：协议与凭据由宿主适配器管理，暂不支持在线探测',
+          })
+          return
+        }
         sendJson(res, 404, { ok: false, error: `未找到 key 为 ${key} 的模型（配置可能已变化，请刷新列表）` })
         return
       }
