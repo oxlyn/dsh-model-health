@@ -112,7 +112,7 @@ dsh-model-health/
 
 ## 依赖锁定 / Dependencies
 
-- `@deepseek-ai/dsh-tools`: `0.1.0-rc.8` (exact — the **`next`**-tag line; npm `latest` is stale).
+- `@deepseek-ai/dsh-tools`: `^0.1.0-rc.8 || ^0.2.0-rc.2`（同时兼容 DSH 0.1.x 与 0.2.0 两条版本线）。
 - `@deepseek-ai/cordis`: `^4.0.1` (peerDependency — host provides it; types-only in code).
 
 ## 友情链接 / Links

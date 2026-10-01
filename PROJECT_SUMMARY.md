@@ -107,7 +107,7 @@ TypeScript 配置要点：
 {
   "bundle": { "patch": "./cordis.patch.yml" },
   "client": {
-    "inject": ["@deepseek-ai/dsh-client-runtime", "@deepseek-ai/dsh-client-ui-settings"],
+    "inject": ["@deepseek-ai/dsh-client-ui-settings"],
     "platform": "web"
   }
 }
@@ -121,7 +121,7 @@ TypeScript 配置要点：
 
 | 依赖 | 版本 | 角色 |
 |------|------|------|
-| `@deepseek-ai/dsh-tools` | `0.1.0-rc.8`（精确锁） | `defineTool()` 工具注册 API |
+| `@deepseek-ai/dsh-tools` | `^0.1.0-rc.8 \|\| ^0.2.0-rc.2` | `defineTool()` 工具注册 API（兼容 0.1.x 与 0.2.0 两条版本线） |
 | `@deepseek-ai/cordis` | `^4.0.1`（peer） | 仅 import `type { Context }`，运行时由宿主提供 |
 | `js-yaml` | `^4.1.0` | 解析 `settings.yaml` |
 | `typescript` / `@types/node` / `@types/js-yaml` | dev | 构建期 |
@@ -129,15 +129,16 @@ TypeScript 配置要点：
 ### 关键避坑点（README 已固化）
 
 1. **Node 版本**：DSH 要求 `^22.19.0 || >=24.0.0`，旧版只告警 EBADENGINE 但有运行时风险。
-2. **npm dist-tag 陷阱**：`@deepseek-ai/dsh-tools` 的 `latest` 是过期 0.0.1-rc.1，真实版本在 `next` tag，本插件已锁定 `0.1.0-rc.8`，勿手动覆盖。
-3. **版本线对齐**：所有 `@deepseek-ai/dsh-*` 包须同处一条 `0.1.0-rc.x` 线，否则 pnpm 装两份模块。
-4. **cordis 是 peer**：只 `import type`，运行时 `ctx` 由宿主注入，**勿** import cordis 运行时值。
-5. **纯 ESM**：`package.json` 必须 `"type": "module"`。
-6. **`dsh plugin add <dir>` 相对路径锚定调用目录**：要在插件父目录执行。
-7. **`cordis.patch.yml` 的 `name` 是包名**（走 node_modules 解析），不是相对路径。
-8. **注册即 effect**：`ctx.tools.register()` / `ctx.on()` 自动清理；自有资源须包 `ctx.effect(() => { ... return cleanup })`。
-9. **加载顺序靠 inject**：`export const inject = ['tools', 'webServer', 'credentials']` 让插件等服务就绪后再加载。
-10. **端到端需 `DEEPSEEK_API_KEY`**：无 key 时只能验证加载/列出/事件，模型调用会 `MISSING_CREDENTIAL`。
+2. **npm dist-tag 陷阱**：`@deepseek-ai/dsh-tools` 的 `latest` 是过期 0.0.1-rc.1，真实版本在 `next` tag；peer 范围写成 `^0.1.0-rc.8 || ^0.2.0-rc.2`，勿手动覆盖。
+3. **版本线对齐**：所有 `@deepseek-ai/dsh-*` 包须同处一条版本线（`0.1.x` 或 `0.2.0`），否则 pnpm 装两份模块。
+4. **0.2.0 客户端清单变更**：`dsh.client.inject` 变为信息性字段（模块请求改由 `dsh.client.external` 声明），且 `@deepseek-ai/dsh-client-runtime` 在 0.2.0 已不存在，已从 inject 列表移除。
+5. **cordis 是 peer**：只 `import type`，运行时 `ctx` 由宿主注入，**勿** import cordis 运行时值。
+6. **纯 ESM**：`package.json` 必须 `"type": "module"`。
+7. **`dsh plugin add <dir>` 相对路径锚定调用目录**：要在插件父目录执行。
+8. **`cordis.patch.yml` 的 `name` 是包名**（走 node_modules 解析），不是相对路径。
+9. **注册即 effect**：`ctx.tools.register()` / `ctx.on()` 自动清理；自有资源须包 `ctx.effect(() => { ... return cleanup })`。
+10. **加载顺序靠 inject**：`export const inject = ['tools', 'webServer', 'credentials']` 让插件等服务就绪后再加载。
+11. **端到端需 `DEEPSEEK_API_KEY`**：无 key 时只能验证加载/列出/事件，模型调用会 `MISSING_CREDENTIAL`。
 
 ## 七、安装与验证
 
