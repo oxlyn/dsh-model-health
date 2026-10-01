@@ -21,7 +21,7 @@ import { collectModels, toPublicRow, type ModelRow } from './host/models'
 import { renderMarkdownTable } from './host/markdown'
 import { sendJson } from './host/http'
 import { createTestRouteHandler } from './host/model-test'
-import { collectRegistryModels, dedupeRegistryRows, type LlmRuntimeLike } from './host/registry'
+import { collectRegistryModels, dedupeRegistryRows, probeRegistryKey, type LlmRuntimeLike } from './host/registry'
 
 export const name = 'dsh-model-health'
 
@@ -108,13 +108,8 @@ export function apply(ctx: Context) {
         }
       },
       profile,
-      // key 不在配置文件时查注册表：内置模型返回「跳过」而不是「未找到」
-      llm
-        ? async (key) => {
-            const registryRows = await collectRegistryModels(llm)
-            return registryRows.find((r) => r.key === key)
-          }
-        : undefined,
+      // key 不在配置文件时经宿主运行时探测（内置模型：协议/凭据由宿主适配器接管）
+      llm ? (key) => probeRegistryKey(llm, key) : undefined,
     ),
   })
 

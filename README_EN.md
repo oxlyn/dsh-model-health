@@ -54,7 +54,7 @@ Reads DSH settings from multiple sources for version compatibility — legacy `$
 **Highlights:**
 
 - Supports both `llm-pi-ai` (multi-protocol custom providers) and `llm-deepseek` (official) configuration sources
-- Built-in model discovery: host built-in models not present in any config file (e.g. the DeepSeek default catalog — deepseek-flash / deepseek-v4-pro) are read from the host `llm` registry and merged in (deduplicated); their protocol and credentials are managed by host adapters, so online probing is unavailable for them (marked "Skip")
+- Built-in model display & probing: host built-in models not present in any config file (e.g. the DeepSeek default catalog — deepseek-flash / deepseek-v4-pro) are read from the host `llm` registry and merged in (deduplicated); probes go through the host runtime (`ctx.llm.stream`) with a minimal request (max_tokens=1), reusing the adapter's protocol, endpoint and credentials — zero extra configuration
 - Availability testing supports `openai-completions` and `deepseek` protocols; other protocols are automatically marked "Skip". 200 responses are body-validated (some gateways return 200 with an error payload)
 - API keys are resolved via the DSH credential service (`ctx.credentials.resolve`) and never exposed to the browser
 - Test results (status / latency / error) persist to localStorage across page refreshes

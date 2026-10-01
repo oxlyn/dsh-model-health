@@ -53,7 +53,7 @@ dsh --profile web --dump-config | grep dsh-model-health   # 配置层含本行
 **特性一览：**
 
 - 支持 `llm-pi-ai`（多协议自定义提供商）与 `llm-deepseek`（官方）两类配置来源
-- 内置模型显示：未写入配置文件的宿主内置模型（如 DeepSeek 默认目录 deepseek-flash / deepseek-v4-pro）自动从宿主 `llm` 注册表读取并去重合并；此类模型协议与凭据由宿主适配器管理，暂不支持在线探测（标记「跳过」）
+- 内置模型显示与健康探测：未写入配置文件的宿主内置模型（如 DeepSeek 默认目录 deepseek-flash / deepseek-v4-pro）自动从宿主 `llm` 注册表读取并去重合并；探测经宿主运行时 `ctx.llm.stream` 发起最小请求（max_tokens=1），协议、端点与凭据全部复用宿主适配器，无需额外配置
 - 可用性测试支持 `openai-completions` 与 `deepseek` 协议，其余协议自动标记「跳过」；对 200 响应校验 body 确实是成功应答（部分网关 200 但 body 是错误对象）
 - API Key 通过 DSH credential service（`ctx.credentials.resolve`）解析，密钥不会输出到浏览器
 - 测试结果（状态/延迟/错误）持久化到 localStorage，刷新页面后仍可见

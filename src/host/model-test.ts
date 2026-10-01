@@ -10,6 +10,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import { readSettingsCached, type SettingsProfile } from './config'
 import { collectModels, type ModelRow } from './models'
 import { readJsonBody, sendJson, isLocalOrigin } from './http'
+import type { RuntimeProbeOutcome } from './registry'
 
 /** 解析 API Key；失败/未配置返回 undefined。 */
 export type ResolveApiKey = (ref: string) => Promise<string | undefined>
@@ -105,8 +106,11 @@ async function probeModel(row: ModelRow, apiKey: string): Promise<{
 export function createTestRouteHandler(
   resolveApiKey: ResolveApiKey,
   profile?: SettingsProfile,
-  /** 可选兜底：key 不在配置文件里时查宿主 llm 注册表（内置模型 → 返回 skip） */
-  findExtraRow?: (key: string) => Promise<ModelRow | undefined>,
+  /**
+   * 可选兜底：key 不在配置文件里时经宿主 llm 运行时探测（内置模型）。
+   * 返回 undefined 表示 key 也不属于注册表（继续 404）。
+   */
+  probeExtra?: (key: string) => Promise<RuntimeProbeOutcome | undefined>,
 ) {
   return async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     // 0. 本地性校验：测试接口会以宿主身份对外发请求，拒绝局域网内其他页面借
@@ -132,14 +136,13 @@ export function createTestRouteHandler(
       const rows = collectModels(readSettingsCached(profile))
       const found = rows.find((r) => r.key === key)
       if (!found) {
-        // 配置文件里没有：可能是宿主注册表里的内置模型（无 baseURL/key 可探测）
-        const extra = findExtraRow ? await findExtraRow(key).catch(() => undefined) : undefined
-        if (extra) {
-          sendJson(res, 200, {
-            ok: true, key, status: 'skip',
-            error: '宿主内置模型：协议与凭据由宿主适配器管理，暂不支持在线探测',
-          })
-          return
+        // 配置文件里没有：内置模型等注册表条目走宿主运行时探测
+        if (probeExtra) {
+          const probed = await probeExtra(key).catch(() => undefined)
+          if (probed) {
+            sendJson(res, 200, { ok: true, key, ...probed })
+            return
+          }
         }
         sendJson(res, 404, { ok: false, error: `未找到 key 为 ${key} 的模型（配置可能已变化，请刷新列表）` })
         return
